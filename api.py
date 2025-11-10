@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+import logging
 from database import SpiceWorkDB
 
 # Load environment variables
@@ -18,6 +19,31 @@ CORS(app)
 # Initialize database
 db_path = os.getenv('DATABASE_PATH', 'spicework.db')
 db = SpiceWorkDB(db_path)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def handle_error(e: Exception, default_message: str = "An error occurred") -> tuple:
+    """
+    Handle errors securely without exposing stack traces
+    
+    Args:
+        e: The exception that occurred
+        default_message: A generic error message to return to the user
+        
+    Returns:
+        Tuple of (response, status_code)
+    """
+    # Log the actual error for debugging
+    logger.error(f"Error occurred: {str(e)}", exc_info=True)
+    
+    # Return a generic error message to the user
+    return jsonify({
+        'success': False,
+        'error': default_message
+    }), 500
 
 
 @app.route('/', methods=['GET'])
@@ -60,10 +86,7 @@ def get_spices():
             'data': spices
         }), 200
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return handle_error(e, "Failed to retrieve spices")
 
 
 @app.route('/spices/<int:spice_id>', methods=['GET'])
@@ -82,10 +105,7 @@ def get_spice(spice_id):
                 'error': 'Spice not found'
             }), 404
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return handle_error(e, "Failed to retrieve spice")
 
 
 @app.route('/spices', methods=['POST'])
@@ -116,10 +136,7 @@ def create_spice():
             'data': spice
         }), 201
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return handle_error(e, "Failed to create spice")
 
 
 @app.route('/spices/<int:spice_id>', methods=['PUT'])
@@ -157,10 +174,7 @@ def update_spice(spice_id):
                 'error': 'Spice not found'
             }), 404
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return handle_error(e, "Failed to update spice")
 
 
 @app.route('/spices/<int:spice_id>', methods=['DELETE'])
@@ -180,10 +194,7 @@ def delete_spice(spice_id):
                 'error': 'Spice not found'
             }), 404
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return handle_error(e, "Failed to delete spice")
 
 
 @app.route('/spices/search', methods=['GET'])
@@ -205,10 +216,7 @@ def search_spices():
             'data': spices
         }), 200
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return handle_error(e, "Failed to search spices")
 
 
 if __name__ == '__main__':
