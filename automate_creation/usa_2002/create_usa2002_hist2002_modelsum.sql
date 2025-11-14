@@ -1,0 +1,12 @@
+-- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_2002/Hist2002_MODELSUM.txt
+-- region: USA, year: 2002
+
+CREATE TABLE usa_2002_hist2002_modelsum (
+    siteid  text,
+    sqid    text,
+    smanuf  text,
+    smodel  text,
+    sstatus text,
+    sclass  text,
+    sqdptr  text
+);

@@ -1,0 +1,36 @@
+-- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_2003/Hist2003_DYNAMIC.txt
+-- region: USA, year: 2003
+
+CREATE TABLE usa_2003_hist2003_dynamic (
+    siteid                text,
+    year_est              text,
+    baacct                text,
+    basales               text,
+    bamktg                text,
+    bahr                  text,
+    bacc                  text,
+    bacust                text,
+    bamanuf               text,
+    baeng                 text,
+    bapurch               text,
+    itsource              text,
+    lan_pres              text,
+    port_pres             text,
+    tollfree_pres         text,
+    phone_sys             text,
+    estbroad              text,
+    estwan                text,
+    planphone_sys         text,
+    app_dev_sw_status1    text,
+    data_mgmt_sw_status1  text,
+    sec_sys_sw_status1    text,
+    storage_sw_status1    text,
+    enterprise_sw_status1 text,
+    office_sw_status1     text,
+    app_dev_sw_status     text,
+    data_mgmt_sw_status   text,
+    sec_sys_sw_status     text,
+    storage_sw_status     text,
+    enterprise_sw_status  text,
+    office_sw_status      text
+);

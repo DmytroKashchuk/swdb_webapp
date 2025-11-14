@@ -1,0 +1,36 @@
+-- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_2001/Hist2001_CORPTOTALS.txt
+-- region: USA, year: 2001
+
+CREATE TABLE usa_2001_hist2001_corptotals (
+    corpid        text,
+    csystems      text,
+    ctotdasd      text,
+    ctotstorage   text,
+    ctotnodes     text,
+    ctotmain      text,
+    ctotibmpcm    text,
+    ctotmidr      text,
+    ctotas400     text,
+    ctotwks       text,
+    ctotserver    text,
+    ctotlansvr    text,
+    ctotinsvr     text,
+    ctotpcsvr     text,
+    ctotpc        text,
+    ctotdesk      text,
+    ctotport      text,
+    ctotext       text,
+    ctotlan       text,
+    ctotddd       text,
+    ctott1        text,
+    ctotdata      text,
+    ctottrunk     text,
+    ctotldexp     text,
+    ctotups       text,
+    ctotplanpc    text,
+    ctotplansvr   text,
+    ctotplanphone text,
+    ctotisdn      text,
+    ctot800       text,
+    cdatgt56k     text
+);
