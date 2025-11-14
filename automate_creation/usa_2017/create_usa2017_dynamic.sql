@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_dynamic (
-    siteid                         text,
+    _siteid_                        text,
     cloud_computing_pls             text,
     pcs_pls                         text,
     das_pls                         text,

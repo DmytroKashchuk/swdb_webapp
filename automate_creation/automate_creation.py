@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import os
-import sys
 import re
 import argparse
 from typing import Optional
@@ -9,7 +8,7 @@ from typing import Optional
 
 def normalize_identifier(name: str) -> str:
     """
-    Normalize column/table names for PostgreSQL:
+    Normalize column names:
     - strip outer quotes and whitespace
     - replace any non-alphanumeric sequence with '_'
     - if it starts with a digit, prefix with 'c_'
@@ -19,7 +18,6 @@ def normalize_identifier(name: str) -> str:
     if name.startswith('"') and name.endswith('"') and len(name) >= 2:
         name = name[1:-1]
     name = name.strip()
-    # Replace non-alphanumeric with underscore
     name = re.sub(r'[^0-9A-Za-z]+', '_', name)
     if re.match(r'^[0-9]', name):
         name = 'c_' + name
@@ -31,7 +29,6 @@ def infer_delimiter(header_line: str, meta_delim: Optional[str] = None) -> str:
     Infer delimiter from JSON metadata and/or header line.
     Tries (in order): meta_delim, then common delimiters.
     """
-    # Map JSON delimiter labels to actual characters
     meta_map = {
         'tab': '\t',
         '\\t': '\t',
@@ -48,7 +45,6 @@ def infer_delimiter(header_line: str, meta_delim: Optional[str] = None) -> str:
         if d and d in header_line:
             return d
 
-    # Fallback: pick the delimiter that yields the most fields (>1)
     candidates = ['\t', ',', '|', ';']
     best = '\t'
     best_len = 1
@@ -61,8 +57,37 @@ def infer_delimiter(header_line: str, meta_delim: Optional[str] = None) -> str:
     return best
 
 
-def generate_sql_files(json_path, output_root="."):
-    # Load JSON (list of records)
+def file_stem_to_snake(file_stem: str) -> str:
+    """
+    Convert file stem like:
+      - 'SiteLevelEnterprise'
+      - 'TECHNOLOGY_LooKuP'
+      - 'ACCOUNT_BUSINESS_LISTS'
+    into snake_case:
+      - 'site_level_enterprise'
+      - 'technology_loo_ku_p'
+      - 'account_business_lists'
+    """
+    s = file_stem.strip()
+
+    # Split on non-alphanumeric separators first
+    raw_parts = re.split(r'[^0-9A-Za-z]+', s)
+    parts = []
+    for p in raw_parts:
+        if not p:
+            continue
+        if p.isupper():
+            # All uppercase: treat as one word
+            parts.append(p.lower())
+        else:
+            # CamelCase: insert '_' before capitals
+            p2 = re.sub(r'(?<!^)(?=[A-Z])', '_', p)
+            parts.append(p2.lower())
+
+    return "_".join(parts)
+
+
+def generate_sql_files(json_path: str, output_root: str = "."):
     with open(json_path, "r", encoding="utf-8") as f:
         records = json.load(f)
 
@@ -74,32 +99,27 @@ def generate_sql_files(json_path, output_root="."):
         meta_delim = rec.get("delimiter")
 
         if not path or not first_lines:
-            print(f"Skipping record (missing path or first_4_lines): {path}", file=sys.stderr)
+            print(f"Skipping record (missing path or first_4_lines): {path}")
             continue
 
-        # ------------------------
-        # Lowercase region/year directory, e.g. "usa_1996"
-        # ------------------------
+        # ---- lowercase region/year directory: e.g. "usa_2017"
         region_clean = region.lower()
         year_str = year.lower()
         region_year_dir = f"{region_clean}_{year_str}"
         out_dir = os.path.join(output_root, region_year_dir)
         os.makedirs(out_dir, exist_ok=True)
 
-        # ------------------------
-        # SQL filename: create_[regionyear]_[file_stem].sql (all lowercase)
-        # e.g. create_usa1996_hist1996_corp.sql
-        # ------------------------
-        base_name = os.path.basename(path)          # e.g. Hist1996_Corp.txt or TECHNOLOGY_LooKuP.TXT
-        file_stem, _ = os.path.splitext(base_name)  # e.g. Hist1996_Corp
-        file_stem_lower = file_stem.lower()
+        # ---- file stem -> snake_case (shared with copy script)
+        base_name = os.path.basename(path)           # e.g. SiteLevelEnterprise.TXT
+        file_stem, _ = os.path.splitext(base_name)   # e.g. SiteLevelEnterprise
+        file_stem_snake = file_stem_to_snake(file_stem)
+
+        # ---- SQL filename: create_usa2017_site_level_enterprise.sql
         regionyear = f"{region_clean}{year_str}"
-        sql_filename = f"create_{regionyear}_{file_stem_lower}.sql"
+        sql_filename = f"create_{regionyear}_{file_stem_snake}.sql"
         sql_path = os.path.join(out_dir, sql_filename)
 
-        # ------------------------
-        # Header parsing with delimiter inference
-        # ------------------------
+        # ---- Header parsing (for columns)
         header_line = first_lines[0]
         delim_char = infer_delimiter(header_line, meta_delim)
         raw_cols = header_line.split(delim_char)
@@ -107,22 +127,16 @@ def generate_sql_files(json_path, output_root="."):
         col_names = []
         for i, raw in enumerate(raw_cols, start=1):
             col = normalize_identifier(raw)
-            if not col:  # safety fallback
+            if not col:
                 col = f"col_{i}"
             col_names.append(col)
 
-        # ------------------------
-        # Table name: region_year_file_stem (lowercase)
-        # e.g. usa_2022_technology_lookup
-        # ------------------------
-        table_name = f"{region_clean}_{year_str}_{file_stem_lower}"
+        # ---- Table name: usa_2017_site_level_enterprise
+        table_name = f"{region_clean}_{year_str}_{file_stem_snake}"
 
-        # Pretty alignment
+        # For pretty alignment
         max_len = max(len(c) for c in col_names) if col_names else 0
 
-        # ------------------------
-        # Build SQL
-        # ------------------------
         lines = []
         lines.append(f"-- source file: {path}")
         lines.append(f"-- region: {region}, year: {year}")
@@ -136,9 +150,6 @@ def generate_sql_files(json_path, output_root="."):
         lines.append(");")
         sql_content = "\n".join(lines)
 
-        # ------------------------
-        # Write .sql file
-        # ------------------------
         with open(sql_path, "w", encoding="utf-8") as out_f:
             out_f.write(sql_content)
 
@@ -153,8 +164,7 @@ def main():
         "json_path",
         nargs="?",
         default="/Users/dmk6603/Documents/ransom/21-swdb_mapping/data/swdb_mapped_usa.json",
-        help="Path to the JSON file "
-             "(default: /Users/dmk6603/Documents/ransom/21-swdb_mapping/data/swdb_mapped_usa.json)",
+        help="Path to the JSON file (default: /Users/dmk6603/Documents/ransom/21-swdb_mapping/data/swdb_mapped_usa.json)",
     )
     parser.add_argument(
         "-o",
