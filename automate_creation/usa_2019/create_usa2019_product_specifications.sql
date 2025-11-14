@@ -6,7 +6,7 @@ CREATE TABLE usa_2019_product_specifications (
     class       text,
     manuf       text,
     model       text,
-    group       text,
+    group_code       text,
     series      text,
     devtype     text,
     description text,

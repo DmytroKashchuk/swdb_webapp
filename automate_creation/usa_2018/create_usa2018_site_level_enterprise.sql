@@ -2,7 +2,7 @@
 -- region: USA, year: 2018
 
 CREATE TABLE usa_2018_site_level_enterprise (
-    _siteid_                  text,
+    siteid                  text,
     ent_id                    text,
     ent_company               text,
     corphdq                   text,

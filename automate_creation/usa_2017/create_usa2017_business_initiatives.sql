@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_business_initiatives (
-    _siteid_                         text,
+    siteid                         text,
     platform_as_service_init         text,
     pcs_init                         text,
     thin_pc_init                     text,

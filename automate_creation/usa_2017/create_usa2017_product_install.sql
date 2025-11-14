@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_product_install (
-    _siteid_ text,
+    siteid text,
     tabkey   text,
     class    text,
     subclass text,

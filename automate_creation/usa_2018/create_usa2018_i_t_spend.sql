@@ -2,7 +2,7 @@
 -- region: USA, year: 2018
 
 CREATE TABLE usa_2018_i_t_spend (
-    _siteid_              text,
+    siteid              text,
     it_budget             text,
     hardware_budget       text,
     pc_budget             text,

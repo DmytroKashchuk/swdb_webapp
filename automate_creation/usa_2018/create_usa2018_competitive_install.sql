@@ -2,7 +2,7 @@
 -- region: USA, year: 2018
 
 CREATE TABLE usa_2018_competitive_install (
-    _siteid_                      text,
+    siteid                      text,
     desktop_manuf                 text,
     other_desktops                text,
     laptop_manuf                  text,

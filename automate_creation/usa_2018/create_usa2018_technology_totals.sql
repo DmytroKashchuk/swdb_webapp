@@ -2,7 +2,7 @@
 -- region: USA, year: 2018
 
 CREATE TABLE usa_2018_technology_totals (
-    _siteid_           text,
+    siteid           text,
     it_staff           text,
     wireless_users     text,
     internet_users     text,

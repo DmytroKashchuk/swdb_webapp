@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_presence_install (
-    _siteid_                         text,
+    siteid                         text,
     desktop_virtualization_pres      text,
     desktop_3yr_pres                 text,
     laptop_3yr_pres                  text,

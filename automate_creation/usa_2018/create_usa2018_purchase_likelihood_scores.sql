@@ -2,7 +2,7 @@
 -- region: USA, year: 2018
 
 CREATE TABLE usa_2018_purchase_likelihood_scores (
-    _siteid_                       text,
+    siteid                       text,
     laptop_pls                     text,
     workstation_pls                text,
     desktop_virtualization_pls     text,
