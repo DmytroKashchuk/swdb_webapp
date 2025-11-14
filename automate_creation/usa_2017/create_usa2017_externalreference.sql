@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_externalreference (
-    _siteid_ text,
+    siteid text,
     ref_type text,
     ref_id   text
 );

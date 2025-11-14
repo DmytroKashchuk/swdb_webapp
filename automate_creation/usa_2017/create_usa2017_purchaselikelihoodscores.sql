@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_purchaselikelihoodscores (
-    _siteid_                       text,
+    siteid                       text,
     laptop_pls                     text,
     workstation_pls                text,
     desktop_virtualization_pls     text,

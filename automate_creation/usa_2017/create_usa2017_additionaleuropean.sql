@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_additionaleuropean (
-    _siteid_               text,
+    siteid               text,
     sites_in_country       text,
     emp_inco_incntry       text,
     pc_in_country          text,

@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_itspend (
-    _siteid_              text,
+    siteid              text,
     it_budget             text,
     hardware_budget       text,
     pc_budget             text,

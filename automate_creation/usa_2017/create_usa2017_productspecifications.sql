@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_productspecifications (
-    _tabkey_    text,
+    tabkey    text,
     class       text,
     manuf       text,
     model       text,

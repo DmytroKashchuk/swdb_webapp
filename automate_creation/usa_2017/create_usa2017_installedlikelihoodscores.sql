@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_installedlikelihoodscores (
-    _siteid_                  text,
+    siteid                  text,
     workstation_ils           text,
     server_virtualization_ils text,
     das_ils                   text,

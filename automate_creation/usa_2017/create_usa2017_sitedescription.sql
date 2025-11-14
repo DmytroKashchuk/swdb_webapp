@@ -2,7 +2,7 @@
 -- region: USA, year: 2017
 
 CREATE TABLE usa_2017_sitedescription (
-    _siteid_            text,
+    siteid            text,
     primary_duns_number text,
     company             text,
     address             text,
