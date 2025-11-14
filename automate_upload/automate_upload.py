@@ -69,19 +69,34 @@ def generate_copy_sql_files(json_path: str, output_root: str = "."):
         utf8_name = f"{file_stem}_utf8{ext}"
         utf8_path = os.path.join(dir_name, utf8_name)
 
-        # Escapa eventuali apici singoli nel path per SQL
+        # Escape eventual single quotes in path for SQL
         utf8_path_sql = utf8_path.replace("'", "''")
+
+        # Decide delimiter based on year:
+        # 2016–2022 -> comma; otherwise -> TAB
+        try:
+            year_int = int(year_str)
+        except ValueError:
+            year_int = None
+
+        if year_int in {2016, 2017, 2018, 2019, 2020, 2021, 2022}:
+            delimiter_part = "DELIMITER ','"
+        else:
+            delimiter_part = "DELIMITER E'\\t'"
+
+        with_parts = ["FORMAT csv", "HEADER true", delimiter_part]
+        with_clause = ", ".join(with_parts)
 
         # SQL filename: copy_usa2017_business_initiatives.sql
         regionyear = f"{region_clean}{year_str}"
         sql_filename = f"copy_{regionyear}_{file_stem_snake}.sql"
         sql_path = os.path.join(out_dir, sql_filename)
 
-        # ⚠️ \copy deve stare tutto su UNA sola riga
+        # \copy must be on a single line
         lines = [
             f"-- load data for: {path}",
             "",
-            f"\\copy {table_name} FROM '{utf8_path_sql}' WITH (FORMAT csv, HEADER true);",
+            f"\\copy {table_name} FROM '{utf8_path_sql}' WITH ({with_clause});",
             "",
         ]
         sql_content = "\n".join(lines)
