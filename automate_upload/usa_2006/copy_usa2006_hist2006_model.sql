@@ -1,5 +1,3 @@
 -- load data for: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_2006/Hist2006_model.txt
 
-\copy usa_2006_hist2006_model
-FROM '/home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_2006/Hist2006_model_utf8.txt'
-WITH (FORMAT csv, HEADER true);
+\copy usa_2006_hist2006_model FROM '/home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_2006/Hist2006_model_utf8.txt' WITH (FORMAT csv, HEADER true);

@@ -56,12 +56,12 @@ def generate_copy_sql_files(json_path: str, output_root: str = "."):
         os.makedirs(out_dir, exist_ok=True)
 
         # --- filename info
-        base_name = os.path.basename(path)           # e.g. ACCOUNT_BUSINESS_LISTS.TXT
-        file_stem, ext = os.path.splitext(base_name)  # e.g. ACCOUNT_BUSINESS_LISTS, .TXT
+        base_name = os.path.basename(path)                 # e.g. BusinessInitiatives.TXT
+        file_stem, ext = os.path.splitext(base_name)       # e.g. BusinessInitiatives, .TXT
 
-        file_stem_snake = file_stem_to_snake(file_stem)  # e.g. account_business_lists
+        file_stem_snake = file_stem_to_snake(file_stem)    # e.g. business_initiatives
 
-        # Table name: usa_2022_account_business_lists
+        # Table name: usa_2017_business_initiatives
         table_name = f"{region_clean}_{year_str}_{file_stem_snake}"
 
         # Converted UTF-8 path: same dir, _utf8 before extension
@@ -69,17 +69,20 @@ def generate_copy_sql_files(json_path: str, output_root: str = "."):
         utf8_name = f"{file_stem}_utf8{ext}"
         utf8_path = os.path.join(dir_name, utf8_name)
 
-        # SQL filename: copy_usa2022_account_business_lists.sql
+        # Escapa eventuali apici singoli nel path per SQL
+        utf8_path_sql = utf8_path.replace("'", "''")
+
+        # SQL filename: copy_usa2017_business_initiatives.sql
         regionyear = f"{region_clean}{year_str}"
         sql_filename = f"copy_{regionyear}_{file_stem_snake}.sql"
         sql_path = os.path.join(out_dir, sql_filename)
 
+        # ⚠️ \copy deve stare tutto su UNA sola riga
         lines = [
             f"-- load data for: {path}",
             "",
-            f"\\copy {table_name}",
-            f"FROM '{utf8_path}'",
-            "WITH (FORMAT csv, HEADER true);",
+            f"\\copy {table_name} FROM '{utf8_path_sql}' WITH (FORMAT csv, HEADER true);",
+            "",
         ]
         sql_content = "\n".join(lines)
 
