@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SWDB Data Explorer</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="header-text">
+        <p class="eyebrow">SWDB • Academic Data Explorer</p>
+        <h1>Explore the SWDB PostgreSQL dataset safely</h1>
+        <p>
+          Run read-only SQL queries against curated tables from 2000&ndash;2022, visualize
+          the result set instantly, and export selected rows. The interface is tuned for
+          clean, distraction-free academic work.
+        </p>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="query-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Query workspace</h2>
+            <p>Only SELECT, WITH, EXPLAIN, DESCRIBE, or SHOW statements are allowed.</p>
+          </div>
+          <button id="run-query" class="primary">Run query</button>
+        </div>
+
+        <label class="sr-only" for="sql-input">SQL query</label>
+        <textarea
+          id="sql-input"
+          spellcheck="false"
+          placeholder="e.g., SELECT * FROM usa_2009_hist2009_system LIMIT 25"
+          rows="8"
+        ></textarea>
+
+        <div class="editor-meta">
+          <span id="status-text" data-variant="info">Idle</span>
+          <span>&middot;</span>
+          <span>Showing up to {{ max_rows }} rows per request.</span>
+        </div>
+
+        <div class="sample-queries">
+          <h3>Sample queries</h3>
+          <div class="chips" role="list">
+            {% for query in sample_queries %}
+            <button class="chip" data-query="{{ query | e }}" role="listitem">Query {{ loop.index }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="results-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Results</h2>
+            <p id="result-summary">No data yet</p>
+          </div>
+          <div class="actions">
+            <button id="download-csv" class="ghost" disabled>Download CSV</button>
+            <button id="download-json" class="ghost" disabled>Download JSON</button>
+          </div>
+        </div>
+
+        <div id="results-table" class="tabulator"></div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+    <script>
+      window.__EXPLORER_CONFIG__ = {
+        downloadUrls: {
+          csv: '#',
+          json: '#'
+        }
+      };
+    </script>
+    <script src="{{ url_for('static', filename='js/query-explorer.js') }}" defer></script>
+  </body>
+</html>
