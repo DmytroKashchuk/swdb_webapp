@@ -473,4 +473,4 @@ def compare_technologies():
 
 if __name__ == "__main__":
 	# ip to run the app: 127.0.0.1 and 10.20.5.20 on port 80 both
-	app.run(host="0.0.0.0", port=80, debug=True)
+	app.run(host="0.0.0.0", port=80)
