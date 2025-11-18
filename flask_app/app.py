@@ -26,7 +26,7 @@ def get_db_connection():
 @app.route("/")
 def index():
 	# Default example query; user can overwrite it in the UI
-	example_query = "SELECT * FROM usa_2009_hist2009_system LIMIT 100;"
+	example_query = "SELECT * FROM usa_2015_hist2015_sitedesc LIMIT 100;"
 	return render_template("index.html", example_query=example_query)
 
 
