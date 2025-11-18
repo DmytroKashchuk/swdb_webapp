@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}SWDB Structure - SWDB Query Explorer{% endblock %}
+
+{% block content %}
+<div class="container">
+	<div class="row mb-3">
+		<div class="col">
+			<h1 class="h3">SWDB Structure</h1>
+			<p class="text-muted mb-0">Overview of SWDB tables and schema by year.</p>
+		</div>
+	</div>
+	<div class="row">
+		<div class="col">
+			<div class="card shadow-sm">
+				<div class="card-body">
+					<div class="markdown-body">
+						{{ content|safe }}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}

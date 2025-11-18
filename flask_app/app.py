@@ -1,4 +1,6 @@
 from flask import Flask, render_template, request, jsonify
+import markdown
+from pathlib import Path
 import psycopg2
 import psycopg2.extras
 
@@ -469,6 +471,23 @@ def compare_technologies():
 		siteid=siteid,
 		comp_siteid=comp_siteid,
 	)
+
+
+@app.route("/swdb-structure")
+def swdb_structure():
+	"""Render the SWDB structure markdown file as an HTML page."""
+
+	md_path = Path(__file__).with_name("swdb_structure.md")
+	markdown_html = ""
+	try:
+		markdown_text = md_path.read_text(encoding="utf-8")
+		markdown_html = markdown.markdown(markdown_text, extensions=["fenced_code", "tables"])
+	except FileNotFoundError:
+		markdown_html = "<p><strong>swdb_structure.md</strong> file not found.</p>"
+	except Exception as exc:  # pragma: no cover
+		markdown_html = f"<p>Error loading markdown: {exc}</p>"
+
+	return render_template("swdb_structure.html", content=markdown_html)
 
 
 if __name__ == "__main__":
