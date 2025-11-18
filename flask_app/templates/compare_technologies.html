@@ -1,0 +1,689 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Technologies{% endblock %}
+
+{% block extra_head %}
+	<style>
+		.query-card {
+			max-width: 960px;
+			margin: 0 auto 1.5rem;
+			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+		}
+
+		.table-container {
+			width: 100%;
+			max-width: 100%;
+			margin: 0 auto;
+		}
+
+		#technologies-table-wrapper,
+		#technologies-comp-table-wrapper {
+			width: 100%;
+		}
+
+		#technologies-table,
+		#technologies-comp-table {
+			min-width: 100%;
+		}
+
+		.tabulator .tabulator-header .tabulator-col {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator .tabulator-row .tabulator-cell {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator {
+			border-radius: 0.25rem;
+			border: 1px solid #dee2e6;
+		}
+	</style>
+{% endblock %}
+
+{% block content %}
+<header class="mb-4">
+	<h1 class="h3 mb-3">Compare Technologies</h1>
+	<p class="text-muted mb-0">
+		Compare technologies between two sites, possibly from different years.
+	</p>
+</header>
+
+<section class="query-card card mb-4">
+	<div class="card-body d-flex justify-content-between align-items-center">
+		<div>
+			<h2 class="h6 mb-1">Selected sites</h2>
+			<p class="text-muted mb-0 small">
+				Use the Compare button to search for companies (like on the Companies page),
+				then add one or two sites to compare.
+			</p>
+		</div>
+		<div class="d-flex gap-2">
+			<button type="button" class="btn btn-outline-secondary" id="clear-selection-btn">Clear</button>
+			<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#compareModal">Compare</button>
+		</div>
+	</div>
+	<div class="card-body pt-0">
+		<div class="row g-3">
+			<div class="col-md-6">
+				<div class="border rounded p-2 h-100">
+					<div class="d-flex justify-content-between align-items-center mb-1">
+						<span class="fw-semibold small">Base site</span>
+						<span class="text-muted small" id="base-site-label">
+							{% if siteid and selected_year %}
+								Site {{ siteid }} ({{ selected_year }})
+							{% else %}
+								None selected
+							{% endif %}
+						</span>
+					</div>
+					<input type="hidden" id="siteid" value="{{ siteid or '' }}" />
+					<input type="hidden" id="year" value="{{ selected_year or '' }}" />
+					<p class="text-muted small mb-0">This will appear on the left.</p>
+				</div>
+			</div>
+			<div class="col-md-6">
+				<div class="border rounded p-2 h-100">
+					<div class="d-flex justify-content-between align-items-center mb-1">
+						<span class="fw-semibold small">Comparison site</span>
+						<span class="text-muted small" id="comp-site-label">
+							{% if comp_siteid and comp_selected_year %}
+								Site {{ comp_siteid }} ({{ comp_selected_year }})
+							{% else %}
+								None selected
+							{% endif %}
+						</span>
+					</div>
+					<input type="hidden" id="siteid2" value="{{ comp_siteid or '' }}" />
+					<input type="hidden" id="year2" value="{{ comp_selected_year or '' }}" />
+					<p class="text-muted small mb-0">This will appear on the right.</p>
+				</div>
+			</div>
+		</div>
+	</div>
+</section>
+
+<!-- Modal for searching and selecting companies/sites to compare -->
+<div class="modal fade" id="compareModal" tabindex="-1" aria-labelledby="compareModalLabel" aria-hidden="true">
+	<div class="modal-dialog modal-xl modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="compareModalLabel">Find company / site to compare</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<form id="modal-search-form" class="row g-3 align-items-end mb-3">
+					<div class="col-md-6">
+						<label for="modal-company" class="form-label fw-semibold">Company name</label>
+						<input
+							type="text"
+							class="form-control"
+							id="modal-company"
+							name="company"
+							placeholder="e.g. Baptist"
+							required
+						/>
+					</div>
+					<div class="col-md-4">
+						<label for="modal-year" class="form-label fw-semibold">Year</label>
+						<select class="form-select" id="modal-year" name="year" required>
+							<option value="" selected>Select year</option>
+							{% for y in range(2000, 2023) %}
+								<option value="{{ y }}">{{ y }}</option>
+							{% endfor %}
+						</select>
+					</div>
+					<div class="col-md-2 d-grid">
+						<button type="submit" class="btn btn-primary">Search</button>
+					</div>
+				</form>
+
+				<div class="table-container">
+					<div id="compare-modal-table-top-scroll" style="display: none; overflow-x: auto; overflow-y: hidden;">
+						<div id="compare-modal-table-top-scroll-inner"></div>
+					</div>
+					<div id="compare-modal-table-wrapper">
+						<div id="compare-modal-table"></div>
+					</div>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<div class="me-auto small text-muted">
+					Select a row in the table, choose slot, then click <strong>Add</strong>.
+				</div>
+				<div class="d-flex align-items-center gap-2">
+					<select id="compare-slot" class="form-select form-select-sm" style="width: auto;">
+						<option value="base">Add as base</option>
+						<option value="comp">Add as comparison</option>
+					</select>
+					<button type="button" class="btn btn-outline-primary" id="add-selected-btn">Add</button>
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<section class="table-container">
+	{% if error %}
+		<div class="alert alert-danger" role="alert">
+			{{ error }}
+		</div>
+	{% endif %}
+
+	<div class="row g-3">
+		<div class="col-md-6">
+			<div class="d-flex justify-content-between align-items-center mb-2">
+				<h2 class="h6 mb-0">Base technologies</h2>
+				<span class="text-muted small">
+					{% if rows %}
+						{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}
+					{% elif siteid and not error %}
+						No technologies found for this site.
+					{% endif %}
+				</span>
+			</div>
+			{% if rows %}
+				<div id="technologies-table-top-scroll">
+					<div id="technologies-table-top-scroll-inner"></div>
+				</div>
+				<div id="technologies-table-wrapper">
+					<div id="technologies-table"></div>
+				</div>
+			{% elif siteid and not error %}
+				<p class="text-muted">No technology records for this site/year combination.</p>
+			{% endif %}
+		</div>
+		<div class="col-md-6">
+			<div class="d-flex justify-content-between align-items-center mb-2">
+				<h2 class="h6 mb-0">Comparison technologies</h2>
+				<span class="text-muted small">
+					{% if comp_rows %}
+						{{ comp_rows|length }} result{{ comp_rows|length == 1 and '' or 's' }}
+					{% elif comp_siteid and not error %}
+						No technologies found for comparison site/year.
+					{% endif %}
+				</span>
+			</div>
+			{% if comp_rows %}
+				<div id="technologies-comp-table-top-scroll">
+					<div id="technologies-comp-table-top-scroll-inner"></div>
+				</div>
+				<div id="technologies-comp-table-wrapper">
+					<div id="technologies-comp-table"></div>
+				</div>
+			{% elif comp_siteid and not error %}
+				<p class="text-muted">No technology records for the comparison site/year combination.</p>
+			{% else %}
+				<p class="text-muted">Enter comparison siteid and year above to compare.</p>
+			{% endif %}
+		</div>
+	</div>
+
+	<div class="mt-3 d-flex flex-wrap gap-3 align-items-center">
+		<span class="small text-muted me-2">Legend:</span>
+		<span class="badge rounded-pill" style="background-color: #e0f7f5; color: #084c4a;">
+			Shared in both (<span id="count-both">0</span>)
+		</span>
+		<span class="badge rounded-pill" style="background-color: #e3f2fd; color: #0d47a1;">
+			Base only (<span id="count-base-only">0</span>)
+		</span>
+		<span class="badge rounded-pill" style="background-color: #ffebee; color: #b71c1c;">
+			Compare only (<span id="count-comp-only">0</span>)
+		</span>
+	</div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+	<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+	<script>
+		let technologiesTable = null;
+		let technologiesCompTable = null;
+		let compareModalTable = null;
+		let compareModalSelectedRow = null;
+
+		function buildTechnologiesColumns(columns) {
+			return columns.map((name) => ({
+				title: name,
+				field: name,
+				headerSort: false,
+				widthShrink: 8,
+			}));
+		}
+
+		function getTechKey(row, year, isBase) {
+			if (!row) return null;
+			let productField = null;
+			let manufField = null;
+
+			if (year >= 2020) {
+				// 2020-2022: product = product, manufacturer = product_vendor
+				productField = row.product;
+				manufField = row.product_vendor;
+			} else if (year >= 2016) {
+				productField = row.model;
+				manufField = row.manuf;
+			} else if (year >= 2010) {
+				productField = row.model;
+				manufField = row.manuf;
+			} else {
+				// 2000 & 2009
+				productField = row.model;
+				manufField = row.manuf;
+			}
+
+			if (!productField || !manufField) {
+				return null;
+			}
+
+			const product = String(productField).toLowerCase().trim();
+			const manuf = String(manufField).toLowerCase().trim();
+			if (!product && !manuf) return null;
+			return `${product} | ${manuf}`;
+		}
+
+		function computeTechnologyDiffs(baseRows, baseYear, compRows, compYear) {
+			const baseSet = new Set();
+			const compSet = new Set();
+
+			if (Array.isArray(baseRows) && baseYear) {
+				for (const r of baseRows) {
+					const key = getTechKey(r, baseYear, true);
+					if (key) baseSet.add(key);
+				}
+			}
+
+			if (Array.isArray(compRows) && compYear) {
+				for (const r of compRows) {
+					const key = getTechKey(r, compYear, false);
+					if (key) compSet.add(key);
+				}
+			}
+
+			const baseOnly = new Set();
+			const compOnly = new Set();
+			const both = new Set();
+
+			for (const k of baseSet) {
+				if (compSet.has(k)) {
+					both.add(k);
+				} else {
+					baseOnly.add(k);
+				}
+			}
+
+			for (const k of compSet) {
+				if (!baseSet.has(k)) {
+					compOnly.add(k);
+				}
+			}
+
+			return { baseOnly, compOnly, both };
+		}
+
+		function setupTechnologiesSynchronizedScrolling() {
+			const topScroll = document.getElementById("technologies-table-top-scroll");
+			const topScrollInner = document.getElementById("technologies-table-top-scroll-inner");
+			const tableHolder = document.querySelector("#technologies-table .tabulator-tableholder");
+
+			if (!tableHolder) return;
+
+			const updateScrollWidth = () => {
+				const tableWidth = tableHolder.scrollWidth;
+				topScrollInner.style.width = tableWidth + "px";
+				topScroll.style.display = tableHolder.scrollWidth > tableHolder.clientWidth ? "block" : "none";
+			};
+
+			updateScrollWidth();
+
+			let isSyncing = false;
+
+			topScroll.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					tableHolder.scrollLeft = topScroll.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			tableHolder.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					topScroll.scrollLeft = tableHolder.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			if (technologiesTable) {
+				technologiesTable.on("tableBuilt", updateScrollWidth);
+				technologiesTable.on("dataLoaded", updateScrollWidth);
+				technologiesTable.on("columnResized", updateScrollWidth);
+				window.addEventListener("resize", updateScrollWidth);
+			}
+		}
+
+		function setupTechnologiesCompSynchronizedScrolling() {
+			const topScroll = document.getElementById("technologies-comp-table-top-scroll");
+			const topScrollInner = document.getElementById("technologies-comp-table-top-scroll-inner");
+			const tableHolder = document.querySelector("#technologies-comp-table .tabulator-tableholder");
+
+			if (!tableHolder) return;
+
+			const updateScrollWidth = () => {
+				const tableWidth = tableHolder.scrollWidth;
+				topScrollInner.style.width = tableWidth + "px";
+				topScroll.style.display = tableHolder.scrollWidth > tableHolder.clientWidth ? "block" : "none";
+			};
+
+			updateScrollWidth();
+
+			let isSyncing = false;
+
+			topScroll.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					tableHolder.scrollLeft = topScroll.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			tableHolder.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					topScroll.scrollLeft = tableHolder.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			if (technologiesCompTable) {
+				technologiesCompTable.on("tableBuilt", updateScrollWidth);
+				technologiesCompTable.on("dataLoaded", updateScrollWidth);
+				technologiesCompTable.on("columnResized", updateScrollWidth);
+				window.addEventListener("resize", updateScrollWidth);
+			}
+		}
+
+		function setupCompareModalSynchronizedScrolling() {
+			const topScroll = document.getElementById("compare-modal-table-top-scroll");
+			const topScrollInner = document.getElementById("compare-modal-table-top-scroll-inner");
+			const tableHolder = document.querySelector("#compare-modal-table .tabulator-tableholder");
+
+			if (!tableHolder) return;
+
+			const updateScrollWidth = () => {
+				const tableWidth = tableHolder.scrollWidth;
+				topScrollInner.style.width = tableWidth + "px";
+				topScroll.style.display = tableHolder.scrollWidth > tableHolder.clientWidth ? "block" : "none";
+			};
+
+			updateScrollWidth();
+
+			let isSyncing = false;
+
+			topScroll.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					tableHolder.scrollLeft = topScroll.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			tableHolder.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					topScroll.scrollLeft = tableHolder.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			if (compareModalTable) {
+				compareModalTable.on("tableBuilt", updateScrollWidth);
+				compareModalTable.on("dataLoaded", updateScrollWidth);
+				compareModalTable.on("columnResized", updateScrollWidth);
+				window.addEventListener("resize", updateScrollWidth);
+			}
+		}
+
+		function initTechnologiesTables() {
+			const baseColumns = {{ (columns or [])|tojson|safe }};
+			const baseRows = {{ (rows or [])|tojson|safe }};
+			const compColumns = {{ (comp_columns or [])|tojson|safe }};
+			const compRows = {{ (comp_rows or [])|tojson|safe }};
+			const baseYear = {{ selected_year or 0 }};
+			const compYear = {{ comp_selected_year or 0 }};
+
+			const { baseOnly, compOnly, both } = computeTechnologyDiffs(baseRows, baseYear, compRows, compYear);
+
+			// Update legend counts
+			const bothEl = document.getElementById("count-both");
+			const baseOnlyEl = document.getElementById("count-base-only");
+			const compOnlyEl = document.getElementById("count-comp-only");
+			if (bothEl) bothEl.textContent = both.size;
+			if (baseOnlyEl) baseOnlyEl.textContent = baseOnly.size;
+			if (compOnlyEl) compOnlyEl.textContent = compOnly.size;
+
+			const baseElement = document.getElementById("technologies-table");
+			if (baseElement && baseRows.length) {
+				const options = {
+					data: baseRows,
+					columns: buildTechnologiesColumns(baseColumns),
+					layout: "fitDataStretch",
+					height: "600px",
+					placeholder: "No technologies to display.",
+					pagination: true,
+					paginationSize: 25,
+					movableColumns: true,
+					resizableColumns: true,
+					rowFormatter: function (row) {
+						const data = row.getData();
+						const key = getTechKey(data, baseYear, true);
+						const element = row.getElement();
+						if (!key || !element) return;
+						if (both.has(key)) {
+							// shared
+							element.style.backgroundColor = "#e0f7f5";
+						} else if (baseOnly.has(key)) {
+							// base-only
+							element.style.backgroundColor = "#e3f2fd";
+						}
+					},
+				};
+
+				technologiesTable = new Tabulator(baseElement, options);
+				setTimeout(setupTechnologiesSynchronizedScrolling, 100);
+			}
+
+			const compElement = document.getElementById("technologies-comp-table");
+			if (compElement && compRows.length) {
+				const compOptions = {
+					data: compRows,
+					columns: buildTechnologiesColumns(compColumns),
+					layout: "fitDataStretch",
+					height: "600px",
+					placeholder: "No technologies to display.",
+					pagination: true,
+					paginationSize: 25,
+					movableColumns: true,
+					resizableColumns: true,
+					rowFormatter: function (row) {
+						const data = row.getData();
+						const key = getTechKey(data, compYear, false);
+						const element = row.getElement();
+						if (!key || !element) return;
+						if (both.has(key)) {
+							// shared
+							element.style.backgroundColor = "#e0f7f5";
+						} else if (compOnly.has(key)) {
+							// compare-only
+							element.style.backgroundColor = "#ffebee";
+						}
+					},
+				};
+
+				technologiesCompTable = new Tabulator(compElement, compOptions);
+				setTimeout(setupTechnologiesCompSynchronizedScrolling, 100);
+			}
+		}
+
+		function initCompareModal() {
+			const modalForm = document.getElementById("modal-search-form");
+			const addBtn = document.getElementById("add-selected-btn");
+			const clearBtn = document.getElementById("clear-selection-btn");
+			const slotSelect = document.getElementById("compare-slot");
+
+			if (!modalForm) return;
+
+			modalForm.addEventListener("submit", function (e) {
+				e.preventDefault();
+				const formData = new FormData(modalForm);
+				const company = formData.get("company");
+				const year = formData.get("year");
+				if (!company || !year) {
+					alert("Please enter a company name and year.");
+					return;
+				}
+
+				const params = new URLSearchParams({ company: company, year: year });
+				const url = `/api/company-search?${params.toString()}`;
+
+				axios
+					.get(url)
+					.then((response) => {
+						if (response.data && !response.data.error && response.data.columns && response.data.rows) {
+							buildCompareModalTable(response.data.columns, response.data.rows, year);
+						} else {
+							const msg = (response.data && response.data.error) || "No results returned.";
+							alert(msg);
+						}
+					})
+					.catch((err) => {
+						console.error(err);
+						alert("Search failed. Please try again.");
+					});
+			});
+
+			if (addBtn) {
+				addBtn.addEventListener("click", function () {
+					if (!compareModalSelectedRow) {
+						alert("Please select a row first.");
+						return;
+					}
+					const slot = slotSelect ? slotSelect.value : "base";
+					const siteIdField = compareModalSelectedRow.siteid || compareModalSelectedRow.site_id;
+					const year = compareModalSelectedRow.__year;
+					if (!siteIdField || !year) {
+						alert("Selected row does not contain a site id or year.");
+						return;
+					}
+
+					if (slot === "base") {
+						const siteInput = document.getElementById("siteid");
+						const yearInput = document.getElementById("year");
+						const label = document.getElementById("base-site-label");
+						if (siteInput && yearInput) {
+							siteInput.value = siteIdField;
+							yearInput.value = year;
+						}
+						if (label) {
+							label.textContent = `Site ${siteIdField} (${year})`;
+						}
+					} else {
+						const siteInput = document.getElementById("siteid2");
+						const yearInput = document.getElementById("year2");
+						const label = document.getElementById("comp-site-label");
+						if (siteInput && yearInput) {
+							siteInput.value = siteIdField;
+							yearInput.value = year;
+						}
+						if (label) {
+							label.textContent = `Site ${siteIdField} (${year})`;
+						}
+					}
+
+					// After adding both sites, reload page to run comparison if we have at least base filled.
+					const baseSite = document.getElementById("siteid").value;
+					const baseYear = document.getElementById("year").value;
+					const compSite = document.getElementById("siteid2").value;
+					const compYear = document.getElementById("year2").value;
+					if (baseSite && baseYear) {
+						const qs = new URLSearchParams();
+						qs.set("siteid", baseSite);
+						qs.set("year", baseYear);
+						if (compSite && compYear) {
+							qs.set("siteid2", compSite);
+							qs.set("year2", compYear);
+						}
+						window.location.search = `?${qs.toString()}`;
+					}
+				});
+			}
+
+			if (clearBtn) {
+				clearBtn.addEventListener("click", function () {
+					document.getElementById("siteid").value = "";
+					document.getElementById("year").value = "";
+					document.getElementById("siteid2").value = "";
+					document.getElementById("year2").value = "";
+					const baseLabel = document.getElementById("base-site-label");
+					const compLabel = document.getElementById("comp-site-label");
+					if (baseLabel) baseLabel.textContent = "None selected";
+					if (compLabel) compLabel.textContent = "None selected";
+					window.location.search = "";
+				});
+			}
+
+		}
+
+		function buildCompareModalColumns(columns) {
+			return columns.map((name) => ({
+				title: name,
+				field: name,
+				headerSort: false,
+				widthShrink: 8,
+			}));
+		}
+
+		function buildCompareModalTable(columns, rows, year) {
+			const tableElement = document.getElementById("compare-modal-table");
+			if (!tableElement) return;
+
+			// Attach year to each row so we can reuse it when adding.
+			const enrichedRows = rows.map((r) => Object.assign({}, r, { __year: year }));
+
+			const options = {
+				data: enrichedRows,
+				columns: buildCompareModalColumns(columns),
+				layout: "fitDataStretch",
+				height: "400px",
+				placeholder: "No results yet.",
+				selectable: 1,
+				pagination: true,
+				paginationSize: 10,
+				movableColumns: true,
+				resizableColumns: true,
+			};
+
+			compareModalSelectedRow = null;
+			if (compareModalTable) {
+				compareModalTable.destroy();
+			}
+
+			compareModalTable = new Tabulator(tableElement, options);
+			compareModalTable.on("rowSelectionChanged", function (data) {
+				compareModalSelectedRow = data && data.length ? data[0] : null;
+			});
+
+			setTimeout(setupCompareModalSynchronizedScrolling, 100);
+		}
+
+		window.addEventListener("load", function () {
+			initTechnologiesTables();
+			initCompareModal();
+		});
+	</script>
+{% endblock %}

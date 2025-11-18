@@ -1,47 +1,40 @@
-# SWDB Data Explorer
+# SWDB Query Explorer
 
-A minimalist Flask interface to explore the SWDB PostgreSQL dataset. The UI lets you
-submit read-only SQL queries, view results in a Tabulator grid, and export selections
-as CSV or JSON. The layout is intentionally white, full-width, and distraction-free to
-match academic usage.
+A minimal Flask + Tabulator web app for running **read-only** SQL queries against the `swdb` PostgreSQL database and visualising the results in a responsive table.
 
 ## Prerequisites
 
-- Python 3.10+
-- Access to the SWDB PostgreSQL instance (credentials provided separately)
+- Python 3.9+
+- Access to the PostgreSQL instance described in `.github/instructions/postgressql_connection.md`
 
-Set the required environment variables before running the app:
+## Installation
+
+Create and activate a virtual environment (recommended), then install dependencies:
 
 ```bash
-export SWDB_DB_HOST=10.20.5.20
-export SWDB_DB_PORT=5432
-export SWDB_DB_NAME=swdb
-export SWDB_DB_USER=postgres_dima
-export SWDB_DB_PASSWORD='<password>'
+pip install flask psycopg2-binary
 ```
 
-You can also place these in a `.env` file if you prefer using `python-dotenv`.
+## Running the app
 
-## Installation & run
+From the `flask_app` folder:
 
 ```bash
-pip install -r requirements.txt
 python app.py
 ```
 
-Visit http://localhost:5000 to open the explorer.
+Then open your browser at:
 
-## Features
+```text
+http://127.0.0.1:5000/
+```
 
-- **Guardrails** – only SELECT/WITH/SHOW/DESCRIBE/EXPLAIN statements are accepted and
-	multiple statements are blocked.
-- **Responsive UI** – Tabulator handles wide tables, sorting, resizing, and local
-	filtering while keeping the page clean and fully wide.
-- **Exports** – Download visible data as CSV or JSON with a single click.
-- **Sample queries** – One-click chips make it easy to start exploring the dataset.
+## Usage
 
-## Next steps
+1. Type or edit a **SELECT** query in the SQL box at the top of the page.
+2. Click **Run query**.
+3. The results will appear in the Tabulator table below.
+   - Columns are resizable and movable.
+   - The table supports horizontal scrolling to accommodate many columns.
 
-- Add authentication if the explorer is exposed beyond trusted users.
-- Persist query history for auditors or teaching assistants.
-- Add schema metadata lookup endpoints to provide autocomplete in the editor.
+> Note: Only `SELECT` queries are allowed for safety; other statement types will be rejected.

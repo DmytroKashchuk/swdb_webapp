@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Companies Search{% endblock %}
+
+{% block extra_head %}
+	<style>
+		.query-card {
+			max-width: 960px;
+			margin: 0 auto 1.5rem;
+			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+		}
+
+		.table-container {
+			width: 100%;
+			max-width: 100%;
+			margin: 0 auto;
+		}
+
+		/* Match Tabulator look-and-feel */
+		#companies-table-wrapper {
+			width: 100%;
+		}
+
+		#companies-table {
+			min-width: 100%;
+		}
+
+		.tabulator .tabulator-header .tabulator-col {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator .tabulator-row .tabulator-cell {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator {
+			border-radius: 0.25rem;
+			border: 1px solid #dee2e6;
+		}
+	</style>
+{% endblock %}
+
+{% block content %}
+<header class="mb-4 text-center">
+	<h1 class="h3 mb-1">Companies Browser</h1>
+	<p class="text-muted mb-0">
+		Search companies by name and year range using curated SWDB tables.
+	</p>
+</header>
+
+<section class="query-card card mb-4">
+	<div class="card-body">
+		<form method="get" action="{{ url_for('companies') }}" class="row g-3 align-items-end">
+			<div class="col-md-6">
+				<label for="company" class="form-label fw-semibold">Company name</label>
+				<input
+					type="text"
+					class="form-control"
+					id="company"
+					name="company"
+					placeholder="e.g. Baptist"
+					value="{{ request.args.get('company', '') }}"
+					required
+				/>
+			</div>
+
+			<div class="col-md-4">
+				<label for="year" class="form-label fw-semibold">Year</label>
+				<select class="form-select" id="year" name="year" required>
+					<option value="" {% if not selected_year %}selected{% endif %}>Select year</option>
+					{% for y in range(2000, 2023) %}
+						<option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
+					{% endfor %}
+				</select>
+			</div>
+
+			<div class="col-md-2 d-grid">
+				<button type="submit" class="btn btn-primary">Search</button>
+			</div>
+		</form>
+
+		{% if error %}
+			<div class="alert alert-danger mt-3 mb-0" role="alert">
+				{{ error }}
+			</div>
+		{% endif %}
+	</div>
+</section>
+
+<section class="table-container">
+	<div class="d-flex justify-content-between align-items-center mb-2">
+		<h2 class="h6 mb-0">Results</h2>
+		<span class="text-muted small">
+			{% if rows %}
+				{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}
+			{% elif company_searched %}
+				No results
+			{% endif %}
+		</span>
+	</div>
+
+	{% if rows %}
+		<div id="companies-table-top-scroll">
+			<div id="companies-table-top-scroll-inner"></div>
+		</div>
+		<div id="companies-table-wrapper">
+			<div id="companies-table"></div>
+		</div>
+	{% elif company_searched %}
+		<div class="alert alert-info" role="alert">
+			No companies matched your filters.
+		</div>
+	{% else %}
+		<p class="text-muted">Enter a company name and year to see matching rows.</p>
+	{% endif %}
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+	<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+	<script>
+		let companiesTable = null;
+
+		function buildCompaniesColumns(columns) {
+			return columns.map((name) => {
+				const colDef = {
+					title: name,
+					field: name,
+					headerSort: false,
+					widthShrink: 8,
+				};
+
+				// Make siteid or site_id column clickable to open Technologies page
+				if (name.toLowerCase() === "siteid" || name.toLowerCase() === "site_id") {
+					colDef.formatter = function (cell) {
+						const value = cell.getValue();
+						return `<a href="#" data-siteid="${value}">${value}</a>`;
+					};
+					colDef.cellClick = function (e, cell) {
+						e.preventDefault();
+						const siteid = cell.getValue();
+						const yearSelect = document.getElementById("year");
+						const year = yearSelect ? yearSelect.value : "";
+						if (!year) {
+							alert("Please select a year first to view technologies.");
+							return;
+						}
+						const params = new URLSearchParams({ siteid: siteid, year: year });
+						window.location.href = `/technologies?${params.toString()}`;
+					};
+				}
+
+				return colDef;
+			});
+		}
+
+		function setupCompaniesSynchronizedScrolling() {
+			const topScroll = document.getElementById("companies-table-top-scroll");
+			const topScrollInner = document.getElementById("companies-table-top-scroll-inner");
+			const tableHolder = document.querySelector("#companies-table .tabulator-tableholder");
+
+			if (!tableHolder) return;
+
+			const updateScrollWidth = () => {
+				const tableWidth = tableHolder.scrollWidth;
+				topScrollInner.style.width = tableWidth + "px";
+				topScroll.style.display = tableHolder.scrollWidth > tableHolder.clientWidth ? "block" : "none";
+			};
+
+			updateScrollWidth();
+
+			let isSyncing = false;
+
+			topScroll.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					tableHolder.scrollLeft = topScroll.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			tableHolder.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					topScroll.scrollLeft = tableHolder.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			if (companiesTable) {
+				companiesTable.on("tableBuilt", updateScrollWidth);
+				companiesTable.on("dataLoaded", updateScrollWidth);
+				companiesTable.on("columnResized", updateScrollWidth);
+				window.addEventListener("resize", updateScrollWidth);
+			}
+		}
+
+		function initCompaniesTable() {
+			const columns = {{ (columns or [])|tojson|safe }};
+			const rows = {{ (rows or [])|tojson|safe }};
+			const tableElement = document.getElementById("companies-table");
+			if (!tableElement) return;
+
+			const options = {
+				data: rows,
+				columns: buildCompaniesColumns(columns),
+				layout: "fitDataStretch",
+				height: "600px",
+				placeholder: "Run a search to see results here.",
+				pagination: true,
+				paginationSize: 25,
+				movableColumns: true,
+				resizableColumns: true,
+			};
+
+			companiesTable = new Tabulator(tableElement, options);
+
+			setTimeout(setupCompaniesSynchronizedScrolling, 100);
+		}
+
+		window.addEventListener("load", initCompaniesTable);
+	</script>
+{% endblock %}

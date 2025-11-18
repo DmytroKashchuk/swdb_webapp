@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Technologies{% endblock %}
+
+{% block extra_head %}
+	<style>
+		.query-card {
+			max-width: 960px;
+			margin: 0 auto 1.5rem;
+			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+		}
+
+		.table-container {
+			width: 100%;
+			max-width: 100%;
+			margin: 0 auto;
+		}
+
+		#technologies-table-wrapper {
+			width: 100%;
+		}
+
+		#technologies-table {
+			min-width: 100%;
+		}
+
+		.tabulator .tabulator-header .tabulator-col {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator .tabulator-row .tabulator-cell {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator {
+			border-radius: 0.25rem;
+			border: 1px solid #dee2e6;
+		}
+	</style>
+{% endblock %}
+
+{% block content %}
+<header class="mb-4">
+	<h1 class="h3 mb-1">Technologies</h1>
+	<p class="text-muted mb-0">
+		Showing technologies for
+		<strong>siteid {{ siteid or 'N/A' }}</strong>
+		{% if selected_year %}
+			in year <strong>{{ selected_year }}</strong>
+		{% endif %}.
+	</p>
+</header>
+
+<section class="table-container">
+	<div class="d-flex justify-content-between align-items-center mb-2">
+		<h2 class="h6 mb-0">Results</h2>
+		<span class="text-muted small">
+			{% if rows %}
+				{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}
+			{% elif siteid %}
+				No technologies found for this site.
+			{% endif %}
+		</span>
+	</div>
+
+	{% if error %}
+		<div class="alert alert-danger" role="alert">
+			{{ error }}
+		</div>
+	{% endif %}
+
+	{% if rows %}
+		<div id="technologies-table-top-scroll">
+			<div id="technologies-table-top-scroll-inner"></div>
+		</div>
+		<div id="technologies-table-wrapper">
+			<div id="technologies-table"></div>
+		</div>
+	{% elif siteid and not error %}
+		<p class="text-muted">No technology records for this site/year combination.</p>
+	{% else %}
+		<p class="text-muted">Navigate here by clicking a siteid on the Companies page.</p>
+	{% endif %}
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+	<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+	<script>
+		let technologiesTable = null;
+
+		function buildTechnologiesColumns(columns) {
+			return columns.map((name) => ({
+				title: name,
+				field: name,
+				headerSort: false,
+				widthShrink: 8,
+			}));
+		}
+
+		function setupTechnologiesSynchronizedScrolling() {
+			const topScroll = document.getElementById("technologies-table-top-scroll");
+			const topScrollInner = document.getElementById("technologies-table-top-scroll-inner");
+			const tableHolder = document.querySelector("#technologies-table .tabulator-tableholder");
+
+			if (!tableHolder) return;
+
+			const updateScrollWidth = () => {
+				const tableWidth = tableHolder.scrollWidth;
+				topScrollInner.style.width = tableWidth + "px";
+				topScroll.style.display = tableHolder.scrollWidth > tableHolder.clientWidth ? "block" : "none";
+			};
+
+			updateScrollWidth();
+
+			let isSyncing = false;
+
+			topScroll.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					tableHolder.scrollLeft = topScroll.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			tableHolder.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					topScroll.scrollLeft = tableHolder.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			if (technologiesTable) {
+				technologiesTable.on("tableBuilt", updateScrollWidth);
+				technologiesTable.on("dataLoaded", updateScrollWidth);
+				technologiesTable.on("columnResized", updateScrollWidth);
+				window.addEventListener("resize", updateScrollWidth);
+			}
+		}
+
+		function initTechnologiesTable() {
+			const columns = {{ (columns or [])|tojson|safe }};
+			const rows = {{ (rows or [])|tojson|safe }};
+			const tableElement = document.getElementById("technologies-table");
+			if (!tableElement) return;
+
+			const options = {
+				data: rows,
+				columns: buildTechnologiesColumns(columns),
+				layout: "fitDataStretch",
+				height: "600px",
+				placeholder: "No technologies to display.",
+				pagination: true,
+				paginationSize: 25,
+				movableColumns: true,
+				resizableColumns: true,
+			};
+
+			technologiesTable = new Tabulator(tableElement, options);
+
+			setTimeout(setupTechnologiesSynchronizedScrolling, 100);
+		}
+
+		window.addEventListener("load", initTechnologiesTable);
+	</script>
+{% endblock %}

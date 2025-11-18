@@ -1,92 +1,285 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SWDB Data Explorer</title>
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
-  </head>
-  <body>
-    <header class="page-header">
-      <div class="header-text">
-        <p class="eyebrow">SWDB • Academic Data Explorer</p>
-        <h1>Explore the SWDB PostgreSQL dataset safely</h1>
-        <p>
-          Run read-only SQL queries against curated tables from 2000&ndash;2022, visualize
-          the result set instantly, and export selected rows. The interface is tuned for
-          clean, distraction-free academic work.
-        </p>
-      </div>
-    </header>
+{% extends "base.html" %}
 
-    <main class="layout">
-      <section class="query-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Query workspace</h2>
-            <p>Only SELECT, WITH, EXPLAIN, DESCRIBE, or SHOW statements are allowed.</p>
-          </div>
-          <button id="run-query" class="primary">Run query</button>
-        </div>
+{% block title %}SWDB Query Explorer{% endblock %}
 
-        <label class="sr-only" for="sql-input">SQL query</label>
-        <textarea
-          id="sql-input"
-          spellcheck="false"
-          placeholder="e.g., SELECT * FROM usa_2009_hist2009_system LIMIT 25"
-          rows="8"
-        ></textarea>
+{% block extra_head %}
+	<style>
+		.query-card {
+			max-width: 960px;
+			margin: 0 auto 1.5rem;
+			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+		}
 
-        <div class="editor-meta">
-          <span id="status-text" data-variant="info">Idle</span>
-          <span>&middot;</span>
-          <span>Showing up to {{ max_rows }} rows per request.</span>
-        </div>
+		.query-input {
+			font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+				"Liberation Mono", "Courier New", monospace;
+			font-size: 0.9rem;
+			min-height: 5rem;
+		}
 
-        <div class="sample-queries">
-          <h3>Sample queries</h3>
-          <div class="chips" role="list">
-            {% for query in sample_queries %}
-            <button class="chip" data-query="{{ query | e }}" role="listitem">Query {{ loop.index }}</button>
-            {% endfor %}
-          </div>
-        </div>
-      </section>
+		.table-container {
+			width: 100%;
+			max-width: 100%;
+			margin: 0 auto;
+		}
 
-      <section class="results-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Results</h2>
-            <p id="result-summary">No data yet</p>
-          </div>
-          <div class="actions">
-            <button id="download-csv" class="ghost" disabled>Download CSV</button>
-            <button id="download-json" class="ghost" disabled>Download JSON</button>
-          </div>
-        </div>
+		/* Tabulator tweaks for many columns */
+		#data-table-wrapper {
+			width: 100%;
+		}
 
-        <div id="results-table" class="tabulator"></div>
-      </section>
-    </main>
+		#data-table-top-scroll {
+			width: 100%;
+			overflow-x: auto;
+			overflow-y: hidden;
+			margin-bottom: 0;
+			border: 1px solid #dee2e6;
+			border-bottom: none;
+			background: #f8f9fa;
+			display: none; /* Will be shown via JS when needed */
+		}
 
-    <script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
-    <script>
-      window.__EXPLORER_CONFIG__ = {
-        downloadUrls: {
-          csv: '#',
-          json: '#'
-        }
-      };
-    </script>
-    <script src="{{ url_for('static', filename='js/query-explorer.js') }}" defer></script>
-  </body>
-</html>
+		#data-table-top-scroll-inner {
+			height: 1px;
+			/* Width will be set dynamically by JavaScript */
+		}
+
+		/* Hide the bottom scroll since we don't need it */
+		#data-table-bottom-scroll {
+			display: none;
+		}
+
+		/* Style the scrollbar for better visibility */
+		#data-table-top-scroll::-webkit-scrollbar {
+			height: 12px;
+		}
+
+		#data-table-top-scroll::-webkit-scrollbar-track {
+			background: #f1f1f1;
+		}
+
+		#data-table-top-scroll::-webkit-scrollbar-thumb {
+			background: #888;
+			border-radius: 6px;
+		}
+
+		#data-table-top-scroll::-webkit-scrollbar-thumb:hover {
+			background: #555;
+		}
+
+		#data-table {
+			min-width: 100%;
+		}
+
+		.tabulator .tabulator-header .tabulator-col {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator .tabulator-row .tabulator-cell {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator {
+			border-radius: 0.25rem;
+			border: 1px solid #dee2e6;
+		}
+
+		/* Ensure the table header is visible when top scroll is shown */
+		#data-table-wrapper .tabulator {
+			border-top-left-radius: 0;
+			border-top-right-radius: 0;
+		}
+
+		#data-table-top-scroll:not([style*="display: none"]) + #data-table-wrapper .tabulator {
+			border-top: none;
+		}
+	</style>
+{% endblock %}
+
+{% block content %}
+	<header class="mb-4 text-center">
+		<h1 class="h3 mb-1">Structured Web Data Browser</h1>
+		<p class="text-muted mb-0">
+			Run read‑only SQL queries against the SWDB PostgreSQL database and
+			explore the results below.
+		</p>
+	</header>
+
+		<section class="query-card card">
+			<div class="card-body">
+				<form id="query-form" class="text-center">
+					<label for="sql-input" class="form-label fw-semibold">
+						SQL query
+					</label>
+					<textarea
+						id="sql-input"
+						name="sql"
+						class="form-control query-input mb-3 mx-auto"
+						style="max-width: 100%;"
+					>{{ example_query }}</textarea>
+
+					<div class="d-flex justify-content-center align-items-center gap-2">
+						<button type="submit" class="btn btn-primary px-4">
+							Run query
+						</button>
+						<span id="status-text" class="text-muted small"></span>
+					</div>
+				</form>
+			</div>
+		</section>
+
+		<section class="table-container">
+			<div class="d-flex justify-content-between align-items-center mb-2">
+				<h2 class="h6 mb-0">Result preview</h2>
+				<span id="row-count" class="text-muted small"></span>
+			</div>
+			<div id="data-table-top-scroll">
+				<div id="data-table-top-scroll-inner"></div>
+			</div>
+			<div id="data-table-wrapper">
+				<div id="data-table"></div>
+			</div>
+			<div id="data-table-bottom-scroll">
+				<div id="data-table-bottom-scroll-inner"></div>
+			</div>
+		</section>
+	{% endblock %}
+
+	{% block extra_scripts %}
+		<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+		<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+		<script>
+			let table = null;
+
+			function buildColumns(columns) {
+				return columns.map((name) => ({
+					title: name,
+					field: name,
+					headerSort: false,
+					widthShrink: 8,
+				}));
+			}
+
+			// Function to set up synchronized scrolling between top scroll bar and table
+			function setupSynchronizedScrolling() {
+				const topScroll = document.getElementById("data-table-top-scroll");
+				const topScrollInner = document.getElementById("data-table-top-scroll-inner");
+				const tableHolder = document.querySelector("#data-table .tabulator-tableholder");
+				
+				if (!tableHolder) return;
+				
+				// Set the inner width to match the table's scrollable content
+				const updateScrollWidth = () => {
+					const tableWidth = tableHolder.scrollWidth;
+					topScrollInner.style.width = tableWidth + "px";
+					// Show top scroll only when content overflows
+					topScroll.style.display = tableHolder.scrollWidth > tableHolder.clientWidth ? "block" : "none";
+				};
+				
+				// Initial setup
+				updateScrollWidth();
+				
+				// Synchronize scrolling between top bar and table
+				let isSyncing = false;
+				
+				topScroll.addEventListener("scroll", () => {
+					if (!isSyncing) {
+						isSyncing = true;
+						tableHolder.scrollLeft = topScroll.scrollLeft;
+						isSyncing = false;
+					}
+				});
+				
+				tableHolder.addEventListener("scroll", () => {
+					if (!isSyncing) {
+						isSyncing = true;
+						topScroll.scrollLeft = tableHolder.scrollLeft;
+						isSyncing = false;
+					}
+				});
+				
+				// Update width when table is redrawn
+				if (table) {
+					table.on("tableBuilt", updateScrollWidth);
+					table.on("dataLoaded", updateScrollWidth);
+					table.on("columnResized", updateScrollWidth);
+					
+					// Also update on window resize
+					window.addEventListener("resize", updateScrollWidth);
+				}
+			}
+
+			function createOrUpdateTable(columns, rows) {
+				const tableElement = document.getElementById("data-table");
+
+				const options = {
+					data: rows,
+					columns: buildColumns(columns),
+					layout: "fitDataStretch", // full width, horizontal scroll when needed
+					height: "600px",
+					placeholder: "Run a query to see results here.",
+					pagination: true,
+					paginationSize: 25,
+					movableColumns: true,
+					resizableColumns: true,
+				};
+
+				if (table) {
+					table.setColumns(options.columns);
+					table.setData(options.data);
+				} else {
+					table = new Tabulator(tableElement, options);
+				}
+				
+				// Set up synchronized scrolling after table is created/updated
+				// Use setTimeout to ensure DOM is fully updated
+				setTimeout(setupSynchronizedScrolling, 100);
+			}
+
+			async function submitQuery(event) {
+				event.preventDefault();
+				const sql = document.getElementById("sql-input").value;
+				const statusEl = document.getElementById("status-text");
+				const rowCountEl = document.getElementById("row-count");
+				statusEl.textContent = "Running query...";
+				rowCountEl.textContent = "";
+
+				try {
+					const response = await axios.post("/api/query", { sql });
+					const { columns, rows } = response.data;
+
+					createOrUpdateTable(columns || [], rows || []);
+
+					const count = rows ? rows.length : 0;
+					rowCountEl.textContent = count
+						? `${count} row${count === 1 ? "" : "s"} returned`
+						: "No rows returned";
+					statusEl.textContent = "Query completed.";
+					statusEl.classList.remove("text-danger");
+				} catch (error) {
+					console.error(error);
+					const message =
+						(error.response && error.response.data && error.response.data.error) ||
+						error.message ||
+						"Unexpected error";
+					statusEl.textContent = message;
+					statusEl.classList.add("text-danger");
+				}
+			}
+
+			document
+				.getElementById("query-form")
+				.addEventListener("submit", submitQuery);
+
+			// Run initial example query on load for faster feedback
+			window.addEventListener("load", () => {
+				const sql = document.getElementById("sql-input").value.trim();
+				if (sql) {
+					document.getElementById("query-form").dispatchEvent(new Event("submit"));
+				}
+			});
+	</script>
+{% endblock %}

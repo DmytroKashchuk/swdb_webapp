@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Companies Accounts Search{% endblock %}
+
+{% block extra_head %}
+	<style>
+		.query-card {
+			max-width: 960px;
+			margin: 0 auto 1.5rem;
+			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+		}
+
+		.table-container {
+			width: 100%;
+			max-width: 100%;
+			margin: 0 auto;
+		}
+
+		#accounts-table-wrapper {
+			width: 100%;
+		}
+
+		#accounts-table {
+			min-width: 100%;
+		}
+
+		.tabulator .tabulator-header .tabulator-col {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator .tabulator-row .tabulator-cell {
+			white-space: nowrap;
+			font-size: 0.75rem;
+		}
+
+		.tabulator {
+			border-radius: 0.25rem;
+			border: 1px solid #dee2e6;
+		}
+	</style>
+{% endblock %}
+
+{% block content %}
+<header class="mb-4 text-center">
+	<h1 class="h3 mb-1">Companies Accounts Browser</h1>
+	<p class="text-muted mb-0">
+		Search company accounts by name and year using curated SWDB tables.
+	</p>
+</header>
+
+<section class="query-card card mb-4">
+	<div class="card-body">
+		<form method="get" action="{{ url_for('companies_accounts') }}" class="row g-3 align-items-end">
+			<div class="col-md-6">
+				<label for="company" class="form-label fw-semibold">Company name</label>
+				<input
+					type="text"
+					class="form-control"
+					id="company"
+					name="company"
+					placeholder="e.g. Baptist"
+					value="{{ request.args.get('company', '') }}"
+					required
+				/>
+			</div>
+
+			<div class="col-md-4">
+				<label for="year" class="form-label fw-semibold">Year</label>
+				<select class="form-select" id="year" name="year" required>
+					<option value="" {% if not selected_year %}selected{% endif %}>Select year</option>
+					{% for y in range(2000, 2023) %}
+						<option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
+					{% endfor %}
+				</select>
+			</div>
+
+			<div class="col-md-2 d-grid">
+				<button type="submit" class="btn btn-primary">Search</button>
+			</div>
+		</form>
+
+		{% if error %}
+			<div class="alert alert-danger mt-3 mb-0" role="alert">
+				{{ error }}
+			</div>
+		{% endif %}
+	</div>
+</section>
+
+<section class="table-container">
+	<div class="d-flex justify-content-between align-items-center mb-2">
+		<h2 class="h6 mb-0">Results</h2>
+		<span class="text-muted small">
+			{% if rows %}
+				{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}
+			{% elif company_searched %}
+				No results
+			{% endif %}
+		</span>
+	</div>
+
+	{% if rows %}
+		<div id="accounts-table-top-scroll">
+			<div id="accounts-table-top-scroll-inner"></div>
+		</div>
+		<div id="accounts-table-wrapper">
+			<div id="accounts-table"></div>
+		</div>
+	{% elif company_searched %}
+		<div class="alert alert-info" role="alert">
+			No accounts matched your filters.
+		</div>
+	{% else %}
+		<p class="text-muted">Enter a company name and year to see matching account rows.</p>
+	{% endif %}
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+	<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+	<script>
+		let accountsTable = null;
+
+		function buildAccountsColumns(columns) {
+			return columns.map((name) => ({
+				title: name,
+				field: name,
+				headerSort: false,
+				widthShrink: 8,
+			}));
+		}
+
+		function setupAccountsSynchronizedScrolling() {
+			const topScroll = document.getElementById("accounts-table-top-scroll");
+			const topScrollInner = document.getElementById("accounts-table-top-scroll-inner");
+			const tableHolder = document.querySelector("#accounts-table .tabulator-tableholder");
+
+			if (!tableHolder) return;
+
+			const updateScrollWidth = () => {
+				const tableWidth = tableHolder.scrollWidth;
+				topScrollInner.style.width = tableWidth + "px";
+				topScroll.style.display = tableHolder.scrollWidth > tableHolder.clientWidth ? "block" : "none";
+			};
+
+			updateScrollWidth();
+
+			let isSyncing = false;
+
+			topScroll.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					tableHolder.scrollLeft = topScroll.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			tableHolder.addEventListener("scroll", () => {
+				if (!isSyncing) {
+					isSyncing = true;
+					topScroll.scrollLeft = tableHolder.scrollLeft;
+					isSyncing = false;
+				}
+			});
+
+			if (accountsTable) {
+				accountsTable.on("tableBuilt", updateScrollWidth);
+				accountsTable.on("dataLoaded", updateScrollWidth);
+				accountsTable.on("columnResized", updateScrollWidth);
+				window.addEventListener("resize", updateScrollWidth);
+			}
+		}
+
+		function initAccountsTable() {
+			const columns = {{ (columns or [])|tojson|safe }};
+			const rows = {{ (rows or [])|tojson|safe }};
+			const tableElement = document.getElementById("accounts-table");
+			if (!tableElement) return;
+
+			const options = {
+				data: rows,
+				columns: buildAccountsColumns(columns),
+				layout: "fitDataStretch",
+				height: "600px",
+				placeholder: "Run a search to see results here.",
+				pagination: true,
+				paginationSize: 25,
+				movableColumns: true,
+				resizableColumns: true,
+			};
+
+			accountsTable = new Tabulator(tableElement, options);
+
+			setTimeout(setupAccountsSynchronizedScrolling, 100);
+		}
+
+		window.addEventListener("load", initAccountsTable);
+	</script>
+{% endblock %}
