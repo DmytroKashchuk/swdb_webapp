@@ -1,7 +1,7 @@
 -- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2020_RDFv3.14/BusinessInitiatives.TXT
 -- region: USA, year: 2020
 
-CREATE TABLE usa_2020_business_initiatives (
+CREATE TABLE IF NOT EXISTS usa_2020_business_initiatives (
     siteid                           text,
     platform_as_service_init         text,
     pcs_init                         text,

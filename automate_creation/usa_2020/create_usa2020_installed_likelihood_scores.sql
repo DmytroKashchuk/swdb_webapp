@@ -1,7 +1,7 @@
 -- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2020_RDFv3.14/InstalledLikelihoodScores.TXT
 -- region: USA, year: 2020
 
-CREATE TABLE usa_2020_installed_likelihood_scores (
+CREATE TABLE IF NOT EXISTS usa_2020_installed_likelihood_scores (
     siteid                    text,
     workstation_ils           text,
     server_virtualization_ils text,

@@ -1,7 +1,7 @@
 -- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2020_RDFv3.14/PurchaseLikelihoodScores.TXT
 -- region: USA, year: 2020
 
-CREATE TABLE usa_2020_purchase_likelihood_scores (
+CREATE TABLE IF NOT EXISTS usa_2020_purchase_likelihood_scores (
     siteid                         text,
     laptop_pls                     text,
     workstation_pls                text,

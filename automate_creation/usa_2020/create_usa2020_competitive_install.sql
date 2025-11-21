@@ -1,7 +1,7 @@
 -- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2020_RDFv3.14/CompetitiveInstall.TXT
 -- region: USA, year: 2020
 
-CREATE TABLE usa_2020_competitive_install (
+CREATE TABLE IF NOT EXISTS usa_2020_competitive_install (
     siteid                        text,
     desktop_manuf                 text,
     other_desktops                text,

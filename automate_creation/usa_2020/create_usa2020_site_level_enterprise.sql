@@ -1,7 +1,7 @@
 -- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2020_RDFv3.14/SiteLevelEnterprise.txt
 -- region: USA, year: 2020
 
-CREATE TABLE usa_2020_site_level_enterprise (
+CREATE TABLE IF NOT EXISTS usa_2020_site_level_enterprise (
     siteid                    text,
     ent_id                    text,
     ent_company               text,

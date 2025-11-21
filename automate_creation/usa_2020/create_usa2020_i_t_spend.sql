@@ -1,7 +1,7 @@
 -- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2020_RDFv3.14/ITSpend.txt
 -- region: USA, year: 2020
 
-CREATE TABLE usa_2020_i_t_spend (
+CREATE TABLE IF NOT EXISTS usa_2020_i_t_spend (
     siteid                text,
     it_budget             text,
     hardware_budget       text,

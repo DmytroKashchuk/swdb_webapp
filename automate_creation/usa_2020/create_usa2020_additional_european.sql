@@ -1,7 +1,7 @@
 -- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2020_RDFv3.14/AdditionalEuropean.TXT
 -- region: USA, year: 2020
 
-CREATE TABLE usa_2020_additional_european (
+CREATE TABLE IF NOT EXISTS usa_2020_additional_european (
     siteid                 text,
     sites_in_country       text,
     emp_inco_incntry       text,
