@@ -115,18 +115,26 @@
 			</div>
 			<div class="modal-body">
 				<form id="modal-search-form" class="row g-3 align-items-end mb-3">
-					<div class="col-md-6">
-						<label for="modal-company" class="form-label fw-semibold">Company name</label>
+					<div class="col-md-3">
+						<label for="modal-mode" class="form-label fw-semibold">Choose filter</label>
+						<select class="form-select" id="modal-mode" name="mode">
+							<option value="company" selected>Company</option>
+							<option value="siteid">Site ID</option>
+							<option value="url">URL</option>
+						</select>
+					</div>
+					<div class="col-md-5">
+						<label for="modal-q" class="form-label fw-semibold">Search value</label>
 						<input
 							type="text"
 							class="form-control"
-							id="modal-company"
-							name="company"
-							placeholder="e.g. University of Tulsa"
+							id="modal-q"
+							name="q"
+							placeholder="Type company, site ID, or URL here"
 							required
 						/>
 					</div>
-					<div class="col-md-4">
+					<div class="col-md-2">
 						<label for="modal-year" class="form-label fw-semibold">Year</label>
 						<select class="form-select" id="modal-year" name="year" required>
 							<option value="" selected>Select year</option>
@@ -251,7 +259,8 @@
 			return columns.map((name) => ({
 				title: name,
 				field: name,
-				headerSort: false,
+				headerSort: true,
+				sorter: "string",
 				widthShrink: 8,
 			}));
 		}
@@ -477,7 +486,7 @@
 					placeholder: "No technologies to display.",
 					pagination: true,
 					paginationSize: 25,
-					movableColumns: true,
+					movableColumns: false,
 					resizableColumns: true,
 					rowFormatter: function (row) {
 						const data = row.getData();
@@ -508,7 +517,7 @@
 					placeholder: "No technologies to display.",
 					pagination: true,
 					paginationSize: 25,
-					movableColumns: true,
+					movableColumns: false,
 					resizableColumns: true,
 					rowFormatter: function (row) {
 						const data = row.getData();
@@ -541,14 +550,15 @@
 			modalForm.addEventListener("submit", function (e) {
 				e.preventDefault();
 				const formData = new FormData(modalForm);
-				const company = formData.get("company");
+				const mode = formData.get("mode");
+				const q = formData.get("q");
 				const year = formData.get("year");
-				if (!company || !year) {
-					alert("Please enter a company name and year.");
+				if (!q || !year) {
+					alert("Please enter a search value and year.");
 					return;
 				}
 
-				const params = new URLSearchParams({ company: company, year: year });
+				const params = new URLSearchParams({ mode: mode, q: q, year: year });
 				const url = `/api/company-search?${params.toString()}`;
 
 				axios
@@ -643,7 +653,8 @@
 			return columns.map((name) => ({
 				title: name,
 				field: name,
-				headerSort: false,
+				headerSort: true,
+				sorter: "string",
 				widthShrink: 8,
 			}));
 		}

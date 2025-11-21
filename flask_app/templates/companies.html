@@ -53,15 +53,24 @@
 <section class="query-card card mb-4">
 	<div class="card-body">
 		<form method="get" action="{{ url_for('companies') }}" class="row g-3 align-items-end">
+			<div class="col-md-2">
+				<label for="mode" class="form-label fw-semibold">Choose filter</label>
+				<select class="form-select" id="mode" name="mode">
+					<option value="company" {% if (search_mode or 'company') == 'company' %}selected{% endif %}>Company</option>
+					<option value="siteid" {% if search_mode == 'siteid' %}selected{% endif %}>Site ID</option>
+					<option value="url" {% if search_mode == 'url' %}selected{% endif %}>URL</option>
+				</select>
+			</div>
+
 			<div class="col-md-6">
-				<label for="company" class="form-label fw-semibold">Company name</label>
+				<label for="q" class="form-label fw-semibold">Search value</label>
 				<input
 					type="text"
 					class="form-control"
-					id="company"
-					name="company"
-					placeholder="e.g. University of Tulsa"
-					value="{{ request.args.get('company', '') }}"
+					id="q"
+					name="q"
+					placeholder="Type company, site ID, or URL here"
+					value="{{ q_value or '' }}"
 					required
 				/>
 			</div>
@@ -113,7 +122,7 @@
 			No companies matched your filters.
 		</div>
 	{% else %}
-		<p class="text-muted">Enter a company name and year to see matching rows.</p>
+		<p class="text-muted">Choose filter, enter a value, and select year to see matching rows.</p>
 	{% endif %}
 </section>
 {% endblock %}

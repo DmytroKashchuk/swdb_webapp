@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}Technology History{% endblock %}
+
+{% block extra_head %}
+	<style>
+		.query-card {
+			max-width: 960px;
+			margin: 0 auto 1.5rem;
+			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+		}
+
+		.history-container {
+			display: flex;
+			flex-direction: row;
+			overflow-x: auto;
+			gap: 1.5rem;
+			padding-bottom: 1rem;
+			width: 100%;
+		}
+
+		.year-card {
+			flex: 0 0 600px; /* Fixed width for each year's table */
+			border: 1px solid #dee2e6;
+			border-radius: 0.25rem;
+			background-color: #fff;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.year-card-header {
+			padding: 0.75rem 1rem;
+			background-color: #f8f9fa;
+			border-bottom: 1px solid #dee2e6;
+			font-weight: 600;
+		}
+
+		.year-card-body {
+			padding: 0;
+			flex: 1;
+			min-height: 400px;
+		}
+
+		.tabulator {
+			border: none;
+		}
+		
+		.tabulator .tabulator-header .tabulator-col {
+			font-size: 0.75rem;
+		}
+
+		.tabulator .tabulator-row .tabulator-cell {
+			font-size: 0.75rem;
+		}
+	</style>
+{% endblock %}
+
+{% block content %}
+<header class="mb-4">
+	<h1 class="h3 mb-3">Technology History</h1>
+	<p class="text-muted mb-0">
+		View the history of technologies for a specific site over a range of years.
+	</p>
+</header>
+
+<section class="query-card card mb-4">
+	<div class="card-body">
+		<form id="history-form" class="row g-3 align-items-end">
+			<div class="col-md-4">
+				<label for="siteid" class="form-label fw-semibold">Site ID</label>
+				<input
+					type="text"
+					class="form-control"
+					id="siteid"
+					name="siteid"
+					placeholder="e.g. 101000003"
+					required
+				/>
+			</div>
+			<div class="col-md-3">
+				<label for="start_year" class="form-label fw-semibold">Start Year</label>
+				<select class="form-select" id="start_year" name="start_year" required>
+					<option value="" selected>Select start</option>
+					{% for y in range(2000, 2023) %}
+						<option value="{{ y }}">{{ y }}</option>
+					{% endfor %}
+				</select>
+			</div>
+			<div class="col-md-3">
+				<label for="end_year" class="form-label fw-semibold">End Year</label>
+				<select class="form-select" id="end_year" name="end_year" required>
+					<option value="" selected>Select end</option>
+					{% for y in range(2000, 2023) %}
+						<option value="{{ y }}">{{ y }}</option>
+					{% endfor %}
+				</select>
+			</div>
+			<div class="col-md-2 d-grid">
+				<button type="submit" class="btn btn-primary">Show History</button>
+			</div>
+		</form>
+	</div>
+</section>
+
+<section id="results-section" style="display: none;">
+	<div class="d-flex justify-content-between align-items-center mb-3">
+		<h2 class="h5 mb-0">History Results</h2>
+		<button type="button" class="btn btn-outline-secondary btn-sm" id="customize-columns-btn" data-bs-toggle="modal" data-bs-target="#columnsModal" disabled>
+			Customize Columns
+		</button>
+	</div>
+	<div id="history-container" class="history-container">
+		<!-- Year cards will be injected here -->
+	</div>
+</section>
+
+<!-- Modal for column selection -->
+<div class="modal fade" id="columnsModal" tabindex="-1" aria-labelledby="columnsModalLabel" aria-hidden="true">
+	<div class="modal-dialog modal-lg modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="columnsModalLabel">Select Columns to Display</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div class="mb-3">
+					<button type="button" class="btn btn-sm btn-outline-primary me-2" id="select-all-cols">Select All</button>
+					<button type="button" class="btn btn-sm btn-outline-secondary" id="deselect-all-cols">Deselect All</button>
+				</div>
+				<div id="columns-checkbox-container" class="row g-2">
+					<!-- Checkboxes will be injected here -->
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+	<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+	<script>
+		let historyTables = []; // Store Tabulator instances
+
+		function getTechKey(row) {
+			if (!row) return null;
+			
+			// Try to find product/model (check multiple possible field names)
+			let product = row.product || row.model || row.product_name;
+			// Try to find vendor/manufacturer
+			let manuf = row.product_vendor || row.manuf || row.manufacturer || row.vendor;
+
+			if (!product || !manuf) return null;
+
+			return `${String(product).toLowerCase().trim()} | ${String(manuf).toLowerCase().trim()}`;
+		}
+
+		function updateColumnSelectionUI(allColumns) {
+			const container = document.getElementById("columns-checkbox-container");
+			container.innerHTML = "";
+			
+			// Sort columns alphabetically
+			const sortedCols = Array.from(allColumns).sort();
+
+			sortedCols.forEach(col => {
+				const colDiv = document.createElement("div");
+				colDiv.className = "col-md-4 col-sm-6";
+				
+				const formCheck = document.createElement("div");
+				formCheck.className = "form-check";
+				
+				const input = document.createElement("input");
+				input.className = "form-check-input column-toggle";
+				input.type = "checkbox";
+				input.value = col;
+				input.id = `col-check-${col}`;
+				input.checked = true; // Default to checked
+
+				input.addEventListener("change", function() {
+					const isVisible = this.checked;
+					const field = this.value;
+					historyTables.forEach(table => {
+						// Check if column exists in this table before toggling
+						const colDef = table.getColumn(field);
+						if (colDef) {
+							if (isVisible) {
+								table.showColumn(field);
+							} else {
+								table.hideColumn(field);
+							}
+						}
+					});
+				});
+
+				const label = document.createElement("label");
+				label.className = "form-check-label small text-break";
+				label.htmlFor = `col-check-${col}`;
+				label.textContent = col;
+
+				formCheck.appendChild(input);
+				formCheck.appendChild(label);
+				colDiv.appendChild(formCheck);
+				container.appendChild(colDiv);
+			});
+
+			document.getElementById("customize-columns-btn").disabled = false;
+		}
+
+		document.getElementById("select-all-cols").addEventListener("click", function() {
+			document.querySelectorAll(".column-toggle").forEach(cb => {
+				cb.checked = true;
+				cb.dispatchEvent(new Event("change"));
+			});
+		});
+
+		document.getElementById("deselect-all-cols").addEventListener("click", function() {
+			document.querySelectorAll(".column-toggle").forEach(cb => {
+				cb.checked = false;
+				cb.dispatchEvent(new Event("change"));
+			});
+		});
+
+		document.getElementById("history-form").addEventListener("submit", function(e) {
+			e.preventDefault();
+			
+			const siteid = document.getElementById("siteid").value.trim();
+			const startYear = parseInt(document.getElementById("start_year").value);
+			const endYear = parseInt(document.getElementById("end_year").value);
+
+			if (!siteid || !startYear || !endYear) {
+				alert("Please fill in all fields.");
+				return;
+			}
+
+			if (startYear > endYear) {
+				alert("Start year must be less than or equal to end year.");
+				return;
+			}
+
+			const container = document.getElementById("history-container");
+			container.innerHTML = '<div class="text-center p-5 w-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+			document.getElementById("results-section").style.display = "block";
+			document.getElementById("customize-columns-btn").disabled = true;
+			historyTables = []; // Reset tables
+
+			const params = new URLSearchParams({
+				siteid: siteid,
+				start_year: startYear,
+				end_year: endYear
+			});
+
+			axios.get(`/api/technology-history?${params.toString()}`)
+				.then(response => {
+					container.innerHTML = "";
+					const data = response.data;
+					
+					if (data.error) {
+						container.innerHTML = `<div class="alert alert-danger w-100">${data.error}</div>`;
+						return;
+					}
+
+					const years = Object.keys(data.results).sort();
+					if (years.length === 0) {
+						container.innerHTML = `<div class="alert alert-info w-100">No data found for the selected range.</div>`;
+						return;
+					}
+
+					// Identify technologies present in ALL years
+					const techYearCounts = new Map(); // Key -> Set of years
+					const totalYears = years.length;
+					const allUniqueColumns = new Set();
+					
+					years.forEach(year => {
+						const yearData = data.results[year];
+						if (yearData.columns) {
+							yearData.columns.forEach(c => allUniqueColumns.add(c));
+						}
+						if (yearData.rows) {
+							yearData.rows.forEach(row => {
+								const key = getTechKey(row);
+								if (key) {
+									if (!techYearCounts.has(key)) {
+										techYearCounts.set(key, new Set());
+									}
+									techYearCounts.get(key).add(year);
+								}
+							});
+						}
+					});
+
+					const commonKeys = new Set();
+					techYearCounts.forEach((yearSet, key) => {
+						if (yearSet.size === totalYears) {
+							commonKeys.add(key);
+						}
+					});
+
+					years.forEach(year => {
+						const yearData = data.results[year];
+						
+						const card = document.createElement("div");
+						card.className = "year-card";
+						
+						const header = document.createElement("div");
+						header.className = "year-card-header";
+						header.textContent = `${year} (${yearData.rows.length} records)`;
+						card.appendChild(header);
+
+						const body = document.createElement("div");
+						body.className = "year-card-body";
+						const tableDiv = document.createElement("div");
+						body.appendChild(tableDiv);
+						card.appendChild(body);
+
+						container.appendChild(card);
+
+						if (yearData.rows.length > 0) {
+							const table = new Tabulator(tableDiv, {
+								data: yearData.rows,
+								columns: yearData.columns.map(col => ({ 
+									title: col, 
+									field: col, 
+									headerSort: true,
+									sorter: "string",
+									widthShrink: 8
+								})),
+								layout: "fitDataStretch",
+								height: "100%",
+								pagination: true,
+								paginationSize: 20,
+								rowFormatter: function(row) {
+									const rowData = row.getData();
+									const key = getTechKey(rowData);
+									if (key && commonKeys.has(key)) {
+										row.getElement().style.backgroundColor = "#d1e7dd"; // Light green highlight
+									}
+								}
+							});
+							historyTables.push(table);
+						} else {
+							tableDiv.innerHTML = '<p class="text-muted p-3 text-center">No data for this year.</p>';
+						}
+					});
+
+					// Initialize column selection UI
+					updateColumnSelectionUI(allUniqueColumns);
+				})
+				.catch(err => {
+					console.error(err);
+					container.innerHTML = `<div class="alert alert-danger w-100">Error loading history: ${err.message}</div>`;
+				});
+		});
+	</script>
+{% endblock %}

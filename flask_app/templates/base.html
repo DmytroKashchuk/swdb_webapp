@@ -66,6 +66,9 @@
 							<a class="nav-link {% if request.endpoint == 'compare_technologies' %}active{% endif %}" href="{{ url_for('compare_technologies') }}">Compare Technologies</a>
 						</li>
 						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'technology_history' %}active{% endif %}" href="{{ url_for('technology_history') }}">Technology History</a>
+						</li>
+						<li class="nav-item">
 							<a class="nav-link {% if request.endpoint == 'swdb_structure' %}active{% endif %}" href="{{ url_for('swdb_structure') }}">SWDB Structure</a>
 						</li>
 					</ul>

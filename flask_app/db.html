@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>USA 2009 Schema – Visual Tables</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #020617;
+      --bg-alt: #020617;
+      --card-bg: #020617;
+      --card-border: #1f2937;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.1);
+      --text: #e5e7eb;
+      --text-soft: #9ca3af;
+      --radius-lg: 16px;
+      --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.85);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #0f172a 0, #020617 40%, #020617 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .app-shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    header {
+      margin-bottom: 18px;
+    }
+
+    .title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px 14px;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 2.6vw, 2.4rem);
+      letter-spacing: -0.04em;
+      background: linear-gradient(to right, #f9fafb, #38bdf8);
+      -webkit-background-clip: text;
+      color: transparent;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-soft);
+    }
+
+    .pill-meta {
+      font-size: 0.78rem;
+      color: var(--text-soft);
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 999px;
+      padding: 4px 10px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pill-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .search-wrapper {
+      position: relative;
+      flex: 1 1 260px;
+      max-width: 420px;
+    }
+
+    .search-input {
+      width: 100%;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      padding: 8px 14px 8px 30px;
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease,
+        background-color 0.18s ease, transform 0.08s ease;
+    }
+
+    .search-input::placeholder {
+      color: rgba(148, 163, 184, 0.7);
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.7),
+        0 12px 35px rgba(15, 23, 42, 0.95);
+      background: #020617;
+      transform: translateY(-0.5px);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.85rem;
+      color: rgba(148, 163, 184, 0.9);
+      pointer-events: none;
+    }
+
+    .view-badge {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-soft);
+      background: rgba(15, 23, 42, 0.95);
+      white-space: nowrap;
+    }
+
+    .view-swatch {
+      width: 14px;
+      height: 10px;
+      border-radius: 3px;
+      background: linear-gradient(
+        135deg,
+        rgba(56, 189, 248, 0.8),
+        rgba(129, 140, 248, 0.8)
+      );
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.7);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 6px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 12px;
+    }
+
+    .schema-card {
+      background: radial-gradient(
+          circle at top left,
+          rgba(15, 23, 42, 0.6),
+          transparent 55%
+        ),
+        radial-gradient(
+          circle at bottom right,
+          rgba(8, 47, 73, 0.9),
+          rgba(15, 23, 42, 1) 55%
+        );
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(15, 23, 42, 0.9);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+      transition: transform 0.14s ease, box-shadow 0.14s ease,
+        border-color 0.18s ease, opacity 0.12s ease, background 0.18s ease;
+      position: relative;
+    }
+
+    .schema-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.98);
+      border-color: rgba(56, 189, 248, 0.6);
+      background: radial-gradient(
+          circle at top left,
+          rgba(37, 99, 235, 0.25),
+          transparent 55%
+        ),
+        radial-gradient(
+          circle at bottom right,
+          rgba(8, 47, 73, 0.9),
+          rgba(15, 23, 42, 1) 55%
+        );
+    }
+
+    .schema-card.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(2px) scale(0.99);
+    }
+
+    .schema-header {
+      padding: 8px 10px;
+      background: linear-gradient(
+        to right,
+        rgba(15, 23, 42, 1),
+        rgba(15, 23, 42, 1)
+      );
+      border-bottom: 1px solid rgba(30, 64, 175, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .schema-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #e5e7eb;
+      margin: 0;
+      word-break: break-all;
+    }
+
+    .schema-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      align-items: flex-end;
+    }
+
+    .schema-chip {
+      font-size: 0.7rem;
+      border-radius: 999px;
+      padding: 2px 7px;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      color: rgba(209, 213, 219, 0.95);
+      background: rgba(15, 23, 42, 1);
+      white-space: nowrap;
+    }
+
+    .schema-chip-pk {
+      border-color: rgba(56, 189, 248, 0.8);
+      color: rgba(191, 219, 254, 0.98);
+    }
+
+    .schema-body {
+      padding: 8px 8px 10px;
+    }
+
+    .table-shell {
+      border-radius: 10px;
+      border: 1px solid rgba(30, 64, 175, 0.7);
+      background: rgba(15, 23, 42, 0.98);
+      overflow: hidden;
+    }
+
+    .table-header-row {
+      display: grid;
+      grid-template-columns: 7fr 3fr;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      padding: 6px 8px;
+      background: linear-gradient(
+        to right,
+        rgba(30, 64, 175, 0.9),
+        rgba(8, 47, 73, 1)
+      );
+      color: rgba(226, 232, 240, 0.96);
+    }
+
+    .table-rows {
+      max-height: 230px;
+      overflow: auto;
+      font-size: 0.78rem;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 7fr 3fr;
+      padding: 4px 8px;
+      align-items: center;
+      border-top: 1px solid rgba(15, 23, 42, 1);
+    }
+
+    .row:nth-child(odd) {
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .row:nth-child(even) {
+      background: rgba(15, 23, 42, 0.98);
+    }
+
+    .col-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #e5e7eb;
+    }
+
+    .col-type {
+      font-size: 0.75rem;
+      color: rgba(148, 163, 184, 0.95);
+      text-align: right;
+    }
+
+    .row-pk {
+      position: relative;
+      background: radial-gradient(
+        circle at left,
+        rgba(56, 189, 248, 0.18),
+        rgba(15, 23, 42, 1) 60%
+      );
+    }
+
+    .row-pk .col-name {
+      font-weight: 600;
+      color: rgba(248, 250, 252, 1);
+    }
+
+    .row-pk::before {
+      content: "PK";
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      color: rgba(191, 219, 254, 1);
+      border-radius: 999px;
+      border: 1px solid rgba(56, 189, 248, 0.85);
+      padding: 1px 5px;
+      position: absolute;
+      left: 6px;
+      top: 3px;
+      background: rgba(15, 23, 42, 0.96);
+    }
+
+    .table-rows::-webkit-scrollbar {
+      width: 7px;
+    }
+
+    .table-rows::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 1);
+      border-radius: 999px;
+    }
+
+    .table-rows::-webkit-scrollbar-thumb {
+      background: rgba(51, 65, 85, 1);
+      border-radius: 999px;
+    }
+
+    .table-rows::-webkit-scrollbar-thumb:hover {
+      background: rgba(71, 85, 105, 1);
+    }
+
+    .mini-footer {
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: var(--text-soft);
+      opacity: 0.8;
+    }
+
+    .badge-soft {
+      border-radius: 999px;
+      border: 1px dashed rgba(148, 163, 184, 0.5);
+      padding: 1px 7px;
+    }
+
+    .empty-state {
+      margin-top: 30px;
+      text-align: center;
+      color: var(--text-soft);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+      .schema-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .schema-meta {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header>
+      <div class="title-row">
+        <h1>USA 2009 Schema</h1>
+        <span class="pill-meta">
+          <span class="pill-dot"></span>
+          Visual table drawings for your DB schema
+        </span>
+      </div>
+      <p class="subtitle">
+        Each box is a table; columns are rows inside. Primary keys are highlighted.
+      </p>
+      <div class="toolbar">
+        <div class="search-wrapper">
+          <span class="search-icon">🔎</span>
+          <input
+            id="search"
+            class="search-input"
+            type="search"
+            placeholder="Filter by table or column name…"
+            autocomplete="off"
+          />
+        </div>
+        <span class="view-badge">
+          <span class="view-swatch"></span>
+          View:&nbsp;<strong>Drawn tables</strong>
+        </span>
+      </div>
+    </header>
+
+    <main>
+      <div id="grid" class="grid"></div>
+      <div id="emptyState" class="empty-state" style="display:none;">
+        No tables match your search. Try another table or column name.
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // ---- TABLE DEFINITIONS --------------------------------------------------
+    // Columns are taken from your header lines; data types are generic "TEXT"
+    // so you can adapt them easily to your DB engine.
+    const tables = [
+      {
+        name: "usa_2009_hist2009_system",
+        primaryKey: "siteid",
+        header: `
+siteid itupdate svrpurch pcpurch totpc planpc totdesk plandesk totport planport totapple planapple pctinteldesk pctamddesk pct3yrdesk pctintelport pctamdport pct3yrport port_pres desktop_manuf portable_manuf preferred_desktop preferred_portable total_pcs_in_country totthinclients planthinclients totserver planserver totpcsusedasserver totsoldasserver totwks planwks totibmpcm planibmpcm totibmmidrange planibmmidrange totintelamdsvr planintelamdsvr totunixriscsvr planunixriscsvr totothpropsvr planothpropsvr platformconfig pctblade planblade preferred_server cluster totstorage das_presence nas_presence san_presence plansan_presence tapelib_presence plandascapacity plannascapacity plansancapacity plantapelibcapacity das_status nas_status san_status tapelib_status disaster_recovery totprt planprt totprodprt planprodprt totcolorprt plancolorprt totlaserprt planlaserprt totinkjetprt planinkjetprt totdotmatrixprt plandotmatrixprt totwideformprt planwideformprt totmultiprt planmultiprt totcopier plancopier totups planups wireless_presence wireless_lan_status wireless_users planwireless_users accesspoints totnodes
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_advecon",
+        primaryKey: "siteid",
+        header: `
+siteid rboc lata telco msapopl longitude latitude eref cellid estwgt whitcworker deskworker random_flag
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_comm",
+        primaryKey: "siteid",
+        header: `
+siteid commdate telesyspurch longdispurch netpurch totext planext cc_presence callcenter telecallers phone_status phone_sys phone_sys_plan pbx_status centrex_status ip_pbx_status ip_centrex_status key_status singlne_status remote_phn_status unsp_phn_status acd_status ivr_presence planivr ldexp totddd planddd totisdn planisdn tott1 plant1 tott3 plant3 totxdsl planxdsl totocx planocx tollfree_pres tot800 tottie cell_status companycell totcell cell_expense cell_dataservice avc_presence avc_service planavc atm_status frame_status sonet_status mpls_status host_flag host_remotes remotes remotes_in_cntry remotesintl vpn_status planmove vip_presence vip_status cos_usage singlesignon patchdeployment netdir_presence firewall firewall_mgmt planfirewall ids ids_mgmt planids ips ips_mgmt planips inetuser inetaccess lansw_presence totlansw planlansw router_presence totrouter planrouter lease_rtrlansw highspeed_presence
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_corp",
+        primaryKey: "corpid",
+        header: `
+corpid europe_corpid ccompany ccompanydba caddress cstreet cstreet2 ccity cstate czipcode ccountry ccountrycode cphone corp_ticker exchange corptype rank corpemple sales cyear cfiscl csiccode cnaics cnaics_3desc cnaics_6desc csites ctotsites cenhsites cmetro cmajmetro alttype altrank cdunsi cinfousa csic2_desc corphpurl ctotbranch ctotdivhq icorp corp_level corp_tdb_flag corp_channel_flag corp_level_sort corp_cgroup corp_parents csicsubgroup corptr czipsector careacode csickey csic3 corp_chansites
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_corptotals",
+        primaryKey: "corpid",
+        header: `
+corpid ctotstorage ctotserver cplanserver ctotibmpcm ctotibmmidrange ctotintelamdsvr ctotunixriscsvr ctotothpropsvr ctotwks ctotpc cplanpc ctotdesk ctotport ctotapple ctotext ctotddd ctott1 ctott3 ctotocx ctotxdsl ctotisdn ctotldexp cplanphone ctot800 cottie ctotups ctotprt cplanprt ctotprodprt ctotcolorprt ctotlaserprt ctotinkjetprt ctotdotmatrixprt ctotwideformprt ctotmultiprt ctotcopier ctotnodes ctotwireless_users cplanwireless_users ctotrouter ctotlansw
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_dynamic",
+        primaryKey: "siteid",
+        header: `
+siteid nuts2_code nuts2_desc nuts3_code nuts3_desc totunspecsvr totnetworkline plannetworkline totunspecline planunspecline estitbudget estcommbudget esthardwarebudget estsoftwarebudget eststoragebudget estservicesbudget estitstaffbudget clli_code estitotherbudget replacementratio appconsolidation naf_code contactsdate wm_totpc wm_totport wm_totserver wm_totprinter wm_totnetworkline wm_totstorage wm_wireless_users wm_totext wm_inetuser wm_itstaff est_storage est_inetuser est_it_staff
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_enterprise",
+        primaryKey: "ent_id",
+        header: `
+ent_id ent_dunsnumber ent_company ent_address ent_address2 ent_address3 ent_city ent_county_name ent_state ent_zipcode ent_country ent_continent_code ent_address_mail ent_address2_mail ent_address3_mail ent_city_mail ent_state_mail ent_country_mail ent_zipcode_mail ent_access_code ent_phone ent_hqcountry ent_metro ent_ticker ent_exchange ent_type ent_rank ent_alttype ent_altrank ent_employees ent_sales ent_dunssites ent_citdbsites ent_citdbdatacenters ent_citdblargeitsites ent_siccode ent_sic4_desc ent_naics ent_naics6_desc ent_url ent_msa_description ent_areacode ent_zipsector ent_zip7 enterprise_id ent_nadunssites
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_literals",
+        primaryKey: "siteid",
+        header: `
+siteid metro_name majmetro_name county_name sic2_desc sic3_desc sic4_desc sicvertical sicsubgroup naics3_desc naics6_desc lata_name telco_name nuts4_desc cntrynuts4_desc cntrynuts2_desc cntrynuts3_desc
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_model",
+        primaryKey: "siteid",
+        header: `
+siteid tabkey class manuf model desc20 desc_2 status idate cpu_platform dbms_platform os_platform qty qty2 qid lockout sortcode1 sortcode2 modptr selectionqty selectionclass selectionstatus week podule module
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_modeldesc",
+        primaryKey: "tabkey",
+        header: `
+tabkey class manuf model mgroup series devtype chip chipfam description os_support category printer_color tabptr totsites totmodel opensource erp
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_modelsum",
+        primaryKey: "siteid",
+        header: `
+siteid sqid smanuf smodel sstatus sclass sqdptr selectionstatus
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_reference",
+        primaryKey: "siteid",
+        header: `
+siteid ref_type ref_id refptr
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_sitedesc",
+        primaryKey: "siteid",
+        header: `
+siteid company address street street2 county_province city state zipcode street_mail city_mail state_mail zipcode_mail country country_code nuts4_code continent phone siccode sicgrp naics emple reven fiscl govtlevel sitedate demodate lastdate language msa metro cmsa majormet county region subregion ziplong ziplat corpid entempl entrevenue corphdq homepageurl stype ref_id xref_id channel_flag fax na_code reg_code turnover_code turnover_local turnover_euros vat_code sites_in_country emp_inco_incntry europe_siteid europe_corpid it_emple_range braziltax natlsource natlrank eurosource eurorank primary_duns_number year_est multinational salesforce mobile_workers mobile_intl corpflag sitptr icorpid locator_flag demo_flag itflag swflag commflag areacode acexch sickey sic3 naics3 zipsector zip7 paupdate duns_presence ent_id
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_softserv",
+        primaryKey: "siteid",
+        header: `
+siteid swupdate developers pc_unix_status pc_linux_status svr_unix_status svr_linux_status svr_opr_status hpw_opr_status drecover_status lansvcs_status swsvcs_status inetsvcs_status wansvcs_status hwsvcs_status hwmnt_status itsource opensource planopensource webservices planwebservices app_dev_sw_status data_mgmt_sw_status workflow_sw_status ent_sys_sw_status security_sw_status storage_sw_status ent_sw_status ind_specific_sw_status grpware_sw_status svr_comp_sw_status erp_presence bpm_framework planbpm_framework datawarehouse plandatawarehouse bus_intel_sw_status ecommerce planecommerce webloc targetaudience edi_development baacct basales bamktg bahr bacc bacust bamanuf baeng bapurch
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_techmod",
+        primaryKey: "siteid",
+        header: `
+siteid estpc estport estwks estserver estibmpcm estibmmidrange estintelamdsvr estunixriscsvr estnodes estprinter estprodprt esttstor estext estddd estisdn estt1 estt3 estldexp estbroad_presence estwan_presence estwireless_users est800
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_trendcomm",
+        primaryKey: "siteid",
+        header: `
+siteid totext_curr_date totext_prev_date totext_first_date totext_annualized_pct totext_industry_pct ldexp_curr_date ldexp_prev_date ldexp_first_date ldexp_annualized_pct ldexp_industry_pct totddd_curr_date totddd_prev_date totddd_first_date totddd_annualized_pct totddd_industry_pct tot800_curr_date tot800_prev_date tot800_first_date tot800_annualized_pct tot800_industry_pct tottie_curr_date tottie_prev_date tottie_first_date tottie_annualized_pct totisdn_curr_date totisdn_prev_date totisdn_first_date totisdn_annualized_pct totisdn_industry_pct tott1_curr_date tott1_prev_date tott1_first_date tott1_annualized_pct tott1_industry_pct tott3_curr_date tott3_prev_date tott3_first_date tott3_annualized_pct tott3_industry_pct totxdsl_curr_date totxdsl_prev_date totxdsl_first_date totxdsl_annualized_pct totocx_curr_date totocx_prev_date totocx_first_date totocx_annualized_pct totcell_curr_date totcell_prev_date totcell_first_date totcell_annualized_pct totrouter_curr_date totrouter_prev_date totrouter_first_date totrouter_annualized_pct totlansw_curr_date totlansw_prev_date totlansw_first_date totlansw_annualized_pct
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_trendrdf",
+        primaryKey: "siteid",
+        header: `
+siteid timetotprt timetotprodprt timetotlaserprt timetotmultiprt timetotwideformprt timetotcopier timetotcolorprt timetotpc timetotdesk timetotport timetotwks timetotserver timetotibmpcm timetotibmmidrange timetotintelamdsvr timetotunixriscsvr timetotnodes timetotrouter timetotlansw timeaccesspoints timewireless_users timetotext timeldexp timetotddd timetot800 timetottie timetotisdn timetott1 timetott3 timetotxdsl timetotocx timetotcell timetotemple indtotprt indtotprodprt indtotpc indtotport indtotwks indtotserver indtotibmpcm indtotibmmidrange indtotintelamdsvr indtotunixriscsvr indtotstorage indtotnodes indwireless_users indtotext indldexp indtotddd indtot800 indtotisdn indtott1 indtott3 plan50000
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_trendsitedesc",
+        primaryKey: "siteid",
+        header: `
+siteid emple_curr_date emple_prev_date emple_first_date emple_annualized_pct itplan50k sic3_desc
+        `,
+      },
+      {
+        name: "usa_2009_hist2009_triggers",
+        primaryKey: "siteid",
+        header: `
+siteid dir_change ceo_change est_itbudgetchg virtualserver compliancetrckng voiceoverip virtualstorage opensource soaimplementation wanacceleration securityupgrades powerconsumption plan50000 pctrendchange svrtrendchange prttrendchange t1trendchange storagecapchg acctgvendorchg cellvendorchg crmvendorchg dbmsvendorchg deskvendorchg grpwvendorchg ldcvendorchg netlnvendorchg langvendorchg oprvendorchg pbxvendorchg portvendorchg storvendorchg svrvendorchg prefdeskchg prefportchg prefsvrchg deskloyaltychg portloyaltychg svrloyaltychg planmove datacentermove offshorelabor trigger_presence
+        `,
+      },
+    ];
+
+    // ---- HELPERS -----------------------------------------------------------
+
+    function parseColumns(header) {
+      return header
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    }
+
+    function renderTables() {
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+
+      tables.forEach((t) => {
+        const cols = parseColumns(t.header);
+        const pk =
+          t.primaryKey && cols.includes(t.primaryKey)
+            ? t.primaryKey
+            : cols[0];
+
+        const card = document.createElement("article");
+        card.className = "schema-card";
+        card.dataset.name = t.name.toLowerCase();
+        card.dataset.columns = cols.join(" ").toLowerCase();
+
+        // Header
+        const header = document.createElement("div");
+        header.className = "schema-header";
+
+        const nameEl = document.createElement("h2");
+        nameEl.className = "schema-name";
+        nameEl.textContent = t.name;
+        header.appendChild(nameEl);
+
+        const meta = document.createElement("div");
+        meta.className = "schema-meta";
+
+        const chipCols = document.createElement("span");
+        chipCols.className = "schema-chip";
+        chipCols.textContent = `${cols.length} col`;
+        meta.appendChild(chipCols);
+
+        const chipPk = document.createElement("span");
+        chipPk.className = "schema-chip schema-chip-pk";
+        chipPk.textContent = `PK: ${pk}`;
+        meta.appendChild(chipPk);
+
+        header.appendChild(meta);
+        card.appendChild(header);
+
+        // Body
+        const body = document.createElement("div");
+        body.className = "schema-body";
+
+        const shell = document.createElement("div");
+        shell.className = "table-shell";
+
+        const headerRow = document.createElement("div");
+        headerRow.className = "table-header-row";
+        headerRow.innerHTML = '<span>Column</span><span>Type</span>';
+        shell.appendChild(headerRow);
+
+        const rowsContainer = document.createElement("div");
+        rowsContainer.className = "table-rows";
+
+        cols.forEach((col) => {
+          const row = document.createElement("div");
+          row.className =
+            "row" + (col === pk ? " row-pk" : "");
+
+          const nameCell = document.createElement("div");
+          nameCell.className = "col-name";
+          nameCell.textContent = col;
+          row.appendChild(nameCell);
+
+          const typeCell = document.createElement("div");
+          typeCell.className = "col-type";
+          typeCell.textContent = "TEXT";
+          row.appendChild(typeCell);
+
+          rowsContainer.appendChild(row);
+        });
+
+        shell.appendChild(rowsContainer);
+        body.appendChild(shell);
+
+        const miniFooter = document.createElement("div");
+        miniFooter.className = "mini-footer";
+        miniFooter.innerHTML =
+          '<span class="badge-soft">All types shown as TEXT – edit when creating the DB</span>' +
+          '<span>Year: 2009 · Dataset: USA</span>';
+        body.appendChild(miniFooter);
+
+        card.appendChild(body);
+        grid.appendChild(card);
+      });
+    }
+
+    function setupSearch() {
+      const input = document.getElementById("search");
+      const emptyState = document.getElementById("emptyState");
+
+      input.addEventListener("input", () => {
+        const q = input.value.trim().toLowerCase();
+        const cards = Array.from(
+          document.querySelectorAll(".schema-card")
+        );
+
+        let visible = 0;
+        cards.forEach((card) => {
+          const name = card.dataset.name;
+          const cols = card.dataset.columns;
+          const match =
+            !q || name.includes(q) || (cols && cols.includes(q));
+          if (match) {
+            card.classList.remove("hidden");
+            visible++;
+          } else {
+            card.classList.add("hidden");
+          }
+        });
+
+        emptyState.style.display = visible === 0 ? "block" : "none";
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      renderTables();
+      setupSearch();
+    });
+  </script>
+</body>
+</html>
