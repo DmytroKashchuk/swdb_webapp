@@ -1,7 +1,7 @@
--- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2022/ACCOUNTS/ACCOUNTS.TXT
--- region: USA, year: 2022
+-- source file: /home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2020_RDFv4.1/ACCOUNTS/ACCOUNTS.txt
+-- region: USA, year: 2020
 
-CREATE TABLE IF NOT EXISTS usa_2022_accounts (
+CREATE TABLE usa_2020_rdf_accounts (
     account_id                    text,
     account_name                  text,
     account_trade_name            text,
