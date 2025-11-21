@@ -616,10 +616,34 @@ def technology_history_api():
 		return jsonify({"error": "Years must be between 2000 and 2022."}), 400
 
 	results = {}
+	site_name = None
 
 	conn = None
 	try:
 		conn = get_db_connection()
+		
+		# Attempt to fetch site name from the most recent year in range
+		for year in range(end_year, start_year - 1, -1):
+			name_query = None
+			if 2021 <= year <= 2022:
+				name_query = f"SELECT site_name FROM usa_{year}_sites WHERE site_id = %s LIMIT 1;"
+			elif 2016 <= year <= 2020:
+				name_query = f"SELECT company FROM usa_{year}_site_description WHERE siteid = %s LIMIT 1;"
+			elif 2000 <= year <= 2015:
+				name_query = f"SELECT company FROM usa_{year}_hist{year}_sitedesc WHERE siteid = %s LIMIT 1;"
+			
+			if name_query:
+				try:
+					with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+						cur.execute(name_query, [siteid])
+						row = cur.fetchone()
+						if row:
+							site_name = row.get('site_name') or row.get('company')
+							break
+				except Exception:
+					conn.rollback()
+					continue
+
 		# We will reuse the connection for multiple queries
 
 		for year in range(start_year, end_year + 1):
@@ -717,7 +741,7 @@ def technology_history_api():
 		if conn:
 			conn.close()
 
-	return jsonify({"results": results})
+	return jsonify({"results": results, "site_name": site_name})
 
 
 if __name__ == "__main__":

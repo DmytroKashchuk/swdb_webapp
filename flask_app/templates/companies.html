@@ -101,13 +101,18 @@
 <section class="table-container">
 	<div class="d-flex justify-content-between align-items-center mb-2">
 		<h2 class="h6 mb-0">Results</h2>
-		<span class="text-muted small">
-			{% if rows %}
-				{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}
-			{% elif company_searched %}
-				No results
-			{% endif %}
-		</span>
+		<div class="d-flex align-items-center gap-2">
+			<button type="button" class="btn btn-outline-secondary btn-sm" id="customize-columns-btn" data-bs-toggle="modal" data-bs-target="#columnsModal" {% if not rows %}disabled{% endif %}>
+				Customize Columns
+			</button>
+			<span class="text-muted small">
+				{% if rows %}
+					{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}
+				{% elif company_searched %}
+					No results
+				{% endif %}
+			</span>
+		</div>
 	</div>
 
 	{% if rows %}
@@ -125,6 +130,30 @@
 		<p class="text-muted">Choose filter, enter a value, and select year to see matching rows.</p>
 	{% endif %}
 </section>
+
+<!-- Modal for column selection -->
+<div class="modal fade" id="columnsModal" tabindex="-1" aria-labelledby="columnsModalLabel" aria-hidden="true">
+	<div class="modal-dialog modal-lg modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="columnsModalLabel">Select Columns to Display</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div class="mb-3">
+					<button type="button" class="btn btn-sm btn-outline-primary me-2" id="select-all-cols">Select All</button>
+					<button type="button" class="btn btn-sm btn-outline-secondary" id="deselect-all-cols">Deselect All</button>
+				</div>
+				<div id="columns-checkbox-container" class="row g-2">
+					<!-- Checkboxes will be injected here -->
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+			</div>
+		</div>
+	</div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -133,6 +162,65 @@
 
 	<script>
 		let companiesTable = null;
+
+		function updateColumnSelectionUI(allColumns) {
+			const container = document.getElementById("columns-checkbox-container");
+			container.innerHTML = "";
+			
+			// Sort columns alphabetically
+			const sortedCols = Array.from(allColumns).sort();
+
+			sortedCols.forEach(col => {
+				const colDiv = document.createElement("div");
+				colDiv.className = "col-md-4 col-sm-6";
+				
+				const formCheck = document.createElement("div");
+				formCheck.className = "form-check";
+				
+				const input = document.createElement("input");
+				input.className = "form-check-input column-toggle";
+				input.type = "checkbox";
+				input.value = col;
+				input.id = `col-check-${col}`;
+				input.checked = true; // Default to checked
+
+				input.addEventListener("change", function() {
+					const isVisible = this.checked;
+					const field = this.value;
+					if (companiesTable) {
+						if (isVisible) {
+							companiesTable.showColumn(field);
+						} else {
+							companiesTable.hideColumn(field);
+						}
+					}
+				});
+
+				const label = document.createElement("label");
+				label.className = "form-check-label small text-break";
+				label.htmlFor = `col-check-${col}`;
+				label.textContent = col;
+
+				formCheck.appendChild(input);
+				formCheck.appendChild(label);
+				colDiv.appendChild(formCheck);
+				container.appendChild(colDiv);
+			});
+		}
+
+		document.getElementById("select-all-cols").addEventListener("click", function() {
+			document.querySelectorAll(".column-toggle").forEach(cb => {
+				cb.checked = true;
+				cb.dispatchEvent(new Event("change"));
+			});
+		});
+
+		document.getElementById("deselect-all-cols").addEventListener("click", function() {
+			document.querySelectorAll(".column-toggle").forEach(cb => {
+				cb.checked = false;
+				cb.dispatchEvent(new Event("change"));
+			});
+		});
 
 		function buildCompaniesColumns(columns) {
 			return columns.map((name) => {
@@ -227,6 +315,8 @@
 			};
 
 			companiesTable = new Tabulator(tableElement, options);
+
+			updateColumnSelectionUI(columns);
 
 			setTimeout(setupCompaniesSynchronizedScrolling, 100);
 		}

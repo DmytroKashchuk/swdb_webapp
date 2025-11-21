@@ -12,11 +12,34 @@
 
 		.history-container {
 			display: flex;
+			flex-direction: column;
+			gap: 2rem;
+			width: 100%;
+		}
+
+		.site-section {
+			background-color: #fff;
+			border: 1px solid #dee2e6;
+			border-radius: 0.25rem;
+			padding: 1rem;
+			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.05);
+		}
+
+		.site-section-header {
+			margin-bottom: 1rem;
+			padding-bottom: 0.5rem;
+			border-bottom: 2px solid #e9ecef;
+			font-weight: 600;
+			font-size: 1.1rem;
+			color: #495057;
+		}
+
+		.site-years-container {
+			display: flex;
 			flex-direction: row;
 			overflow-x: auto;
 			gap: 1.5rem;
 			padding-bottom: 1rem;
-			width: 100%;
 		}
 
 		.year-card {
@@ -67,15 +90,16 @@
 	<div class="card-body">
 		<form id="history-form" class="row g-3 align-items-end">
 			<div class="col-md-4">
-				<label for="siteid" class="form-label fw-semibold">Site ID</label>
+				<label for="siteid" class="form-label fw-semibold">Site ID(s)</label>
 				<input
 					type="text"
 					class="form-control"
 					id="siteid"
 					name="siteid"
-					placeholder="e.g. 101000003"
+					placeholder="e.g. 101000003, 101000004"
 					required
 				/>
+				<div class="form-text">Separate multiple IDs with commas.</div>
 			</div>
 			<div class="col-md-3">
 				<label for="start_year" class="form-label fw-semibold">Start Year</label>
@@ -228,11 +252,11 @@
 		document.getElementById("history-form").addEventListener("submit", function(e) {
 			e.preventDefault();
 			
-			const siteid = document.getElementById("siteid").value.trim();
+			const siteidInput = document.getElementById("siteid").value.trim();
 			const startYear = parseInt(document.getElementById("start_year").value);
 			const endYear = parseInt(document.getElementById("end_year").value);
 
-			if (!siteid || !startYear || !endYear) {
+			if (!siteidInput || !startYear || !endYear) {
 				alert("Please fill in all fields.");
 				return;
 			}
@@ -242,112 +266,164 @@
 				return;
 			}
 
+			// Split site IDs by comma and clean up
+			const siteIds = siteidInput.split(",").map(s => s.trim()).filter(s => s.length > 0);
+			if (siteIds.length === 0) {
+				alert("Please enter at least one valid Site ID.");
+				return;
+			}
+
 			const container = document.getElementById("history-container");
 			container.innerHTML = '<div class="text-center p-5 w-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
 			document.getElementById("results-section").style.display = "block";
 			document.getElementById("customize-columns-btn").disabled = true;
 			historyTables = []; // Reset tables
 
-			const params = new URLSearchParams({
-				siteid: siteid,
-				start_year: startYear,
-				end_year: endYear
+			// Create a promise for each site ID
+			const requests = siteIds.map(id => {
+				const params = new URLSearchParams({
+					siteid: id,
+					start_year: startYear,
+					end_year: endYear
+				});
+				return axios.get(`/api/technology-history?${params.toString()}`)
+					.then(response => ({ id: id, data: response.data, error: null }))
+					.catch(err => ({ id: id, data: null, error: err.message }));
 			});
 
-			axios.get(`/api/technology-history?${params.toString()}`)
-				.then(response => {
+			Promise.all(requests)
+				.then(results => {
 					container.innerHTML = "";
-					const data = response.data;
-					
-					if (data.error) {
-						container.innerHTML = `<div class="alert alert-danger w-100">${data.error}</div>`;
-						return;
-					}
-
-					const years = Object.keys(data.results).sort();
-					if (years.length === 0) {
-						container.innerHTML = `<div class="alert alert-info w-100">No data found for the selected range.</div>`;
-						return;
-					}
-
-					// Identify technologies present in ALL years
-					const techYearCounts = new Map(); // Key -> Set of years
-					const totalYears = years.length;
 					const allUniqueColumns = new Set();
-					
-					years.forEach(year => {
-						const yearData = data.results[year];
-						if (yearData.columns) {
-							yearData.columns.forEach(c => allUniqueColumns.add(c));
-						}
-						if (yearData.rows) {
-							yearData.rows.forEach(row => {
-								const key = getTechKey(row);
-								if (key) {
-									if (!techYearCounts.has(key)) {
-										techYearCounts.set(key, new Set());
-									}
-									techYearCounts.get(key).add(year);
-								}
-							});
-						}
-					});
 
-					const commonKeys = new Set();
-					techYearCounts.forEach((yearSet, key) => {
-						if (yearSet.size === totalYears) {
-							commonKeys.add(key);
-						}
-					});
+					results.forEach(result => {
+						const siteId = result.id;
+						const data = result.data;
+						const error = result.error;
 
-					years.forEach(year => {
-						const yearData = data.results[year];
-						
-						const card = document.createElement("div");
-						card.className = "year-card";
+						// Create section for this site
+						const siteSection = document.createElement("div");
+						siteSection.className = "site-section";
 						
 						const header = document.createElement("div");
-						header.className = "year-card-header";
-						header.textContent = `${year} (${yearData.rows.length} records)`;
-						card.appendChild(header);
+						header.className = "site-section-header";
+						const displayName = data.site_name ? `${data.site_name} (ID: ${siteId})` : `Site ID: ${siteId}`;
+						header.textContent = displayName;
+						siteSection.appendChild(header);
 
-						const body = document.createElement("div");
-						body.className = "year-card-body";
-						const tableDiv = document.createElement("div");
-						body.appendChild(tableDiv);
-						card.appendChild(body);
-
-						container.appendChild(card);
-
-						if (yearData.rows.length > 0) {
-							const table = new Tabulator(tableDiv, {
-								data: yearData.rows,
-								columns: yearData.columns.map(col => ({ 
-									title: col, 
-									field: col, 
-									headerSort: true,
-									sorter: "string",
-									widthShrink: 8
-								})),
-								layout: "fitDataStretch",
-								height: "100%",
-								pagination: true,
-								paginationSize: 20,
-								rowFormatter: function(row) {
-									const rowData = row.getData();
-									const key = getTechKey(rowData);
-									if (key && commonKeys.has(key)) {
-										row.getElement().style.backgroundColor = "#d1e7dd"; // Light green highlight
-									}
-								}
-							});
-							historyTables.push(table);
-						} else {
-							tableDiv.innerHTML = '<p class="text-muted p-3 text-center">No data for this year.</p>';
+						if (error) {
+							const errDiv = document.createElement("div");
+							errDiv.className = "alert alert-danger";
+							errDiv.textContent = `Error loading data: ${error}`;
+							siteSection.appendChild(errDiv);
+							container.appendChild(siteSection);
+							return;
 						}
+
+						if (data.error) {
+							const errDiv = document.createElement("div");
+							errDiv.className = "alert alert-danger";
+							errDiv.textContent = data.error;
+							siteSection.appendChild(errDiv);
+							container.appendChild(siteSection);
+							return;
+						}
+
+						const years = Object.keys(data.results).sort();
+						if (years.length === 0) {
+							const infoDiv = document.createElement("div");
+							infoDiv.className = "alert alert-info";
+							infoDiv.textContent = "No data found for the selected range.";
+							siteSection.appendChild(infoDiv);
+							container.appendChild(siteSection);
+							return;
+						}
+
+						// Container for horizontal scrolling years
+						const yearsContainer = document.createElement("div");
+						yearsContainer.className = "site-years-container";
+						siteSection.appendChild(yearsContainer);
+
+						// Identify technologies present in ALL years for THIS site
+						const techYearCounts = new Map(); // Key -> Set of years
+						const totalYears = years.length;
+						
+						years.forEach(year => {
+							const yearData = data.results[year];
+							if (yearData.columns) {
+								yearData.columns.forEach(c => allUniqueColumns.add(c));
+							}
+							if (yearData.rows) {
+								yearData.rows.forEach(row => {
+									const key = getTechKey(row);
+									if (key) {
+										if (!techYearCounts.has(key)) {
+											techYearCounts.set(key, new Set());
+										}
+										techYearCounts.get(key).add(year);
+									}
+								});
+							}
+						});
+
+						const commonKeys = new Set();
+						techYearCounts.forEach((yearSet, key) => {
+							if (yearSet.size === totalYears) {
+								commonKeys.add(key);
+							}
+						});
+
+						years.forEach(year => {
+							const yearData = data.results[year];
+							
+							const card = document.createElement("div");
+							card.className = "year-card";
+							
+							const cardHeader = document.createElement("div");
+							cardHeader.className = "year-card-header";
+							cardHeader.textContent = `${year} (${yearData.rows.length} records)`;
+							card.appendChild(cardHeader);
+
+							const cardBody = document.createElement("div");
+							cardBody.className = "year-card-body";
+							const tableDiv = document.createElement("div");
+							cardBody.appendChild(tableDiv);
+							card.appendChild(cardBody);
+
+							yearsContainer.appendChild(card);
+
+							if (yearData.rows.length > 0) {
+								const table = new Tabulator(tableDiv, {
+									data: yearData.rows,
+									columns: yearData.columns.map(col => ({ 
+										title: col, 
+										field: col, 
+										headerSort: true,
+										sorter: "string",
+										widthShrink: 8
+									})),
+									layout: "fitDataStretch",
+									height: "100%",
+									pagination: true,
+									paginationSize: 20,
+									rowFormatter: function(row) {
+										const rowData = row.getData();
+										const key = getTechKey(rowData);
+										if (key && commonKeys.has(key)) {
+											row.getElement().style.backgroundColor = "#d1e7dd"; // Light green highlight
+										}
+									}
+								});
+								historyTables.push(table);
+							} else {
+								tableDiv.innerHTML = '<p class="text-muted p-3 text-center">No data for this year.</p>';
+							}
+						});
+
+						container.appendChild(siteSection);
 					});
 
-					// Initialize column selection UI
+					// Initialize column selection UI with columns from ALL sites
 					updateColumnSelectionUI(allUniqueColumns);
 				})
 				.catch(err => {
