@@ -129,9 +129,14 @@
 <section id="results-section" style="display: none;">
 	<div class="d-flex justify-content-between align-items-center mb-3">
 		<h2 class="h5 mb-0">History Results</h2>
-		<button type="button" class="btn btn-outline-secondary btn-sm" id="customize-columns-btn" data-bs-toggle="modal" data-bs-target="#columnsModal" disabled>
-			Customize Columns
-		</button>
+		<div class="d-flex gap-2">
+			<button type="button" class="btn btn-outline-primary btn-sm" id="export-csv-btn" disabled>
+				Export to CSV
+			</button>
+			<button type="button" class="btn btn-outline-secondary btn-sm" id="customize-columns-btn" data-bs-toggle="modal" data-bs-target="#columnsModal" disabled>
+				Customize Columns
+			</button>
+		</div>
 	</div>
 	<div id="history-container" class="history-container">
 		<!-- Year cards will be injected here -->
@@ -170,6 +175,7 @@
 
 	<script>
 		let historyTables = []; // Store Tabulator instances
+		let currentHistoryData = null; // Store fetched data for export
 
 		function getTechKey(row) {
 			if (!row) return null;
@@ -249,6 +255,70 @@
 			});
 		});
 
+		document.getElementById("export-csv-btn").addEventListener("click", function() {
+			if (!currentHistoryData) return;
+
+			// 1. Collect all rows and all columns
+			let allRows = [];
+			let allColumns = new Set(["Site ID", "Year"]);
+
+			currentHistoryData.forEach(siteResult => {
+				if (siteResult.error || !siteResult.data || siteResult.data.error) return;
+				
+				const siteId = siteResult.id;
+				const yearsData = siteResult.data.results;
+				
+				Object.keys(yearsData).forEach(year => {
+					const yearInfo = yearsData[year];
+					if (yearInfo.rows && yearInfo.rows.length > 0) {
+						// Add columns
+						if (yearInfo.columns) {
+							yearInfo.columns.forEach(c => allColumns.add(c));
+						}
+						
+						// Add rows
+						yearInfo.rows.forEach(row => {
+							// Create a new object with Site ID and Year first
+							let newRow = { "Site ID": siteId, "Year": year, ...row };
+							allRows.push(newRow);
+						});
+					}
+				});
+			});
+
+			if (allRows.length === 0) {
+				alert("No data to export.");
+				return;
+			}
+
+			// 2. Convert to CSV
+			const columnsArray = Array.from(allColumns);
+			let csvContent = columnsArray.join(",") + "\n";
+
+			allRows.forEach(row => {
+				const rowString = columnsArray.map(col => {
+					let cell = row[col] === undefined || row[col] === null ? "" : String(row[col]);
+					// Escape quotes and wrap in quotes if necessary
+					if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
+						cell = `"${cell.replace(/"/g, '""')}"`;
+					}
+					return cell;
+				}).join(",");
+				csvContent += rowString + "\n";
+			});
+
+			// 3. Download
+			const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.setAttribute("href", url);
+			link.setAttribute("download", "technology_history_export.csv");
+			link.style.visibility = 'hidden';
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		});
+
 		document.getElementById("history-form").addEventListener("submit", function(e) {
 			e.preventDefault();
 			
@@ -277,7 +347,9 @@
 			container.innerHTML = '<div class="text-center p-5 w-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
 			document.getElementById("results-section").style.display = "block";
 			document.getElementById("customize-columns-btn").disabled = true;
+			document.getElementById("export-csv-btn").disabled = true;
 			historyTables = []; // Reset tables
+			currentHistoryData = null;
 
 			// Create a promise for each site ID
 			const requests = siteIds.map(id => {
@@ -293,6 +365,7 @@
 
 			Promise.all(requests)
 				.then(results => {
+					currentHistoryData = results;
 					container.innerHTML = "";
 					const allUniqueColumns = new Set();
 
@@ -425,6 +498,7 @@
 
 					// Initialize column selection UI with columns from ALL sites
 					updateColumnSelectionUI(allUniqueColumns);
+					document.getElementById("export-csv-btn").disabled = false;
 				})
 				.catch(err => {
 					console.error(err);

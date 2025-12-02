@@ -48,6 +48,9 @@ def companies():
 	q_value = request.args.get("q", "").strip()
 	search_mode = request.args.get("mode", "company")
 	year_raw = request.args.get("year")
+	hq_only = request.args.get("hq_only") == "on"
+	gov_filter = request.args.get("gov_filter") == "on"
+	gov_levels = request.args.getlist("gov_levels")
 
 	rows = []
 	columns = []
@@ -106,8 +109,42 @@ def companies():
 					where_sql = f"{company_col} ILIKE %s"
 					params = [f"%{q_value}%"]
 
+				select_clause = "*"
+				# Add HQ filter if requested
+				if hq_only:
+					if 2000 <= year <= 2015:
+						where_sql += " AND corphdq = 'Ultimate HQ'"
+					elif 2016 <= year <= 2020:
+						table = f"usa_{year}_site_description t1 JOIN usa_{year}_site_level_enterprise t2 ON t1.siteid = t2.siteid"
+						select_clause = "t1.*"
+						if search_mode == "siteid":
+							where_sql = where_sql.replace("siteid =", "t1.siteid =")
+						where_sql += " AND t2.corphdq = 'Headquarter'"
+					elif 2021 <= year <= 2022:
+						where_sql += " AND site_type = 'Headquarters'"
+
+				# Add Government Level filter if requested
+				if gov_filter and gov_levels:
+					gov_col = None
+					if 2000 <= year <= 2020:
+						gov_col = "govtlevel"
+					elif 2021 <= year <= 2022:
+						gov_col = "site_govt_level"
+					
+					if gov_col:
+						gov_conditions = []
+						for level in gov_levels:
+							if level == "Enterprise":
+								gov_conditions.append(f"({gov_col} IS NULL OR {gov_col} = '')")
+							else:
+								gov_conditions.append(f"{gov_col} ILIKE %s")
+								params.append(level)
+						
+						if gov_conditions:
+							where_sql += " AND (" + " OR ".join(gov_conditions) + ")"
+
 				if where_sql:
-					query = f"SELECT * FROM {table} WHERE {where_sql} LIMIT 500;"
+					query = f"SELECT {select_clause} FROM {table} WHERE {where_sql} LIMIT 500;"
 				else:
 					query = None
 
@@ -135,6 +172,9 @@ def companies():
 		selected_year=selected_year,
 		search_mode=search_mode,
 		q_value=q_value,
+		hq_only=hq_only,
+		gov_filter=gov_filter,
+		gov_levels=gov_levels,
 	)
 
 
@@ -160,6 +200,7 @@ def company_search_api():
 
 	search_mode = request.args.get("mode", "company")
 	year_raw = request.args.get("year")
+	hq_only = request.args.get("hq_only") == "true" or request.args.get("hq_only") == "on"
 
 	if not q_value or not year_raw:
 		return jsonify({"error": "Both search value and year are required."}), 400
@@ -213,7 +254,21 @@ def company_search_api():
 		where_sql = f"{company_col} ILIKE %s"
 		params = [f"%{q_value}%"]
 
-	query = f"SELECT * FROM {table} WHERE {where_sql} LIMIT 500;"
+	select_clause = "*"
+	# Add HQ filter if requested
+	if hq_only:
+		if 2000 <= year <= 2015:
+			where_sql += " AND corphdq = 'Ultimate HQ'"
+		elif 2016 <= year <= 2020:
+			table = f"usa_{year}_site_description t1 JOIN usa_{year}_sitelevelenterprise t2 ON t1.siteid = t2.siteid"
+			select_clause = "t1.*"
+			if search_mode == "siteid":
+				where_sql = where_sql.replace("siteid =", "t1.siteid =")
+			where_sql += " AND t2.corphdq = 'Ultimate HQ'"
+		elif 2021 <= year <= 2022:
+			where_sql += " AND site_type = 'Headquarters'"
+
+	query = f"SELECT {select_clause} FROM {table} WHERE {where_sql} LIMIT 500;"
 
 	try:
 		conn = get_db_connection()

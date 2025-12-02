@@ -85,6 +85,42 @@
 				</select>
 			</div>
 
+			<div class="col-md-12">
+				<div class="form-check">
+					<input class="form-check-input" type="checkbox" id="hq_only" name="hq_only" {% if hq_only %}checked{% endif %}>
+					<label class="form-check-label" for="hq_only">
+						HQ Only
+					</label>
+				</div>
+			</div>
+
+			<div class="col-md-12">
+				<div class="form-check">
+					<input class="form-check-input" type="checkbox" id="gov_filter" name="gov_filter" {% if gov_filter %}checked{% endif %}>
+					<label class="form-check-label" for="gov_filter">
+						Filter by Government Level
+					</label>
+				</div>
+				<div id="gov_options" class="ms-4 mt-2" style="display: {% if gov_filter %}block{% else %}none{% endif %};">
+					<div class="form-check form-check-inline">
+						<input class="form-check-input" type="checkbox" id="gov_local" name="gov_levels" value="Local" {% if 'Local' in gov_levels %}checked{% endif %}>
+						<label class="form-check-label" for="gov_local">Local</label>
+					</div>
+					<div class="form-check form-check-inline">
+						<input class="form-check-input" type="checkbox" id="gov_state" name="gov_levels" value="State" {% if 'State' in gov_levels %}checked{% endif %}>
+						<label class="form-check-label" for="gov_state">State</label>
+					</div>
+					<div class="form-check form-check-inline">
+						<input class="form-check-input" type="checkbox" id="gov_federal" name="gov_levels" value="Federal" {% if 'Federal' in gov_levels %}checked{% endif %}>
+						<label class="form-check-label" for="gov_federal">Federal</label>
+					</div>
+					<div class="form-check form-check-inline">
+						<input class="form-check-input" type="checkbox" id="gov_enterprise" name="gov_levels" value="Enterprise" {% if 'Enterprise' in gov_levels %}checked{% endif %}>
+						<label class="form-check-label" for="gov_enterprise">Enterprise (Empty)</label>
+					</div>
+				</div>
+			</div>
+
 			<div class="col-md-2 d-grid">
 				<button type="submit" class="btn btn-primary">Search</button>
 			</div>
@@ -227,7 +263,8 @@
 				const colDef = {
 					title: name,
 					field: name,
-					headerSort: false,
+					headerSort: true,
+					sorter: "string",
 					widthShrink: 8,
 				};
 
@@ -310,7 +347,7 @@
 				placeholder: "Run a search to see results here.",
 				pagination: true,
 				paginationSize: 25,
-				movableColumns: true,
+				movableColumns: false,
 				resizableColumns: true,
 			};
 
@@ -322,5 +359,14 @@
 		}
 
 		window.addEventListener("load", initCompaniesTable);
+
+		const govFilterCheckbox = document.getElementById('gov_filter');
+		const govOptionsDiv = document.getElementById('gov_options');
+
+		if (govFilterCheckbox && govOptionsDiv) {
+			govFilterCheckbox.addEventListener('change', function() {
+				govOptionsDiv.style.display = this.checked ? 'block' : 'none';
+			});
+		}
 	</script>
 {% endblock %}
