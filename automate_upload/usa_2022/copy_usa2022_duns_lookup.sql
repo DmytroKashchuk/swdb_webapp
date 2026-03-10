@@ -1,1 +1,1 @@
-\copy usa_2022_duns_lookup FROM '/home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2022/DUNS_LooKuP_utf8.TXT' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+\copy usa_2022_duns_lookup FROM '/home/dima/swdb/swdb_all_data/swdb_all_data_unziped/USA_aod_2022/DUNS_LooKuP.TXT' WITH (FORMAT csv, HEADER true, DELIMITER ',');
