@@ -141,6 +141,10 @@
 			<button type="button" class="btn btn-outline-secondary btn-sm" id="customize-columns-btn" data-bs-toggle="modal" data-bs-target="#columnsModal" {% if not rows %}disabled{% endif %}>
 				Customize Columns
 			</button>
+			<div class="form-check form-switch mb-0">
+				<input class="form-check-input" type="checkbox" id="preferred-columns-toggle" {% if not rows %}disabled{% endif %}>
+				<label class="form-check-label small" for="preferred-columns-toggle">Preferred columns</label>
+			</div>
 			<span class="text-muted small">
 				{% if rows %}
 					{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}
@@ -198,6 +202,12 @@
 
 	<script>
 		let companiesTable = null;
+		let allColumns = [];
+
+		const preferredColumnSets = {
+			legacy: ["siteid", "company", "street", "city", "state", "country", "emple", "reven", "homepageurl", "sicgrp", "govtlevel", "county", "corphdq"],
+			modern: ["site_id", "site_name", "site_trade_name", "site_street1", "site_city", "site_state", "site_country", "site_employees", "site_revenue_usd", "site_url", "site_govt_level", "site_county", "site_type", "sic2_desc"],
+		};
 
 		function updateColumnSelectionUI(allColumns) {
 			const container = document.getElementById("columns-checkbox-container");
@@ -336,6 +346,7 @@
 		function initCompaniesTable() {
 			const columns = {{ (columns or [])|tojson|safe }};
 			const rows = {{ (rows or [])|tojson|safe }};
+			allColumns = columns || [];
 			const tableElement = document.getElementById("companies-table");
 			if (!tableElement) return;
 
@@ -359,6 +370,78 @@
 		}
 
 		window.addEventListener("load", initCompaniesTable);
+
+		function getPreferredColumnsForSelectedYear() {
+			const yearSelect = document.getElementById("year");
+			if (!yearSelect) return [];
+			const year = parseInt(yearSelect.value, 10);
+			if (Number.isNaN(year)) return [];
+
+			const availableColumns = companiesTable
+				? companiesTable.getColumnDefinitions().map((col) => col.field)
+				: allColumns;
+
+			const lowerToActual = new Map(availableColumns.map((name) => [name.toLowerCase(), name]));
+
+			let preferredList = [];
+			if (year >= 2020 && year <= 2022) {
+				preferredList = preferredColumnSets.modern;
+			} else if (year >= 2016 && year <= 2019) {
+				preferredList = preferredColumnSets.legacy;
+			} else if (year >= 2010 && year <= 2015) {
+				preferredList = preferredColumnSets.legacy;
+			} else if (year >= 2000 && year <= 2009) {
+				preferredList = preferredColumnSets.legacy;
+			} else {
+				preferredList = [];
+			}
+
+			return preferredList
+				.map((name) => lowerToActual.get(name.toLowerCase()))
+				.filter(Boolean);
+		}
+
+		function toggleColumnsByList(targetColumns) {
+			const checkboxes = document.querySelectorAll(".column-toggle");
+			if (!checkboxes.length) return;
+			checkboxes.forEach((cb) => {
+				const shouldShow = targetColumns.includes(cb.value);
+				cb.checked = shouldShow;
+				cb.dispatchEvent(new Event("change"));
+			});
+		}
+
+		function applyPreferredColumns() {
+			if (!companiesTable) return false;
+			const preferred = getPreferredColumnsForSelectedYear();
+			if (!preferred.length) {
+				alert("Preferred columns are not available for the selected year.");
+				return false;
+			}
+			toggleColumnsByList(preferred);
+			return true;
+		}
+
+		function showAllColumns() {
+			const all = companiesTable
+				? companiesTable.getColumnDefinitions().map((col) => col.field)
+				: allColumns;
+			toggleColumnsByList(all);
+		}
+
+		const preferredToggle = document.getElementById("preferred-columns-toggle");
+		if (preferredToggle) {
+			preferredToggle.addEventListener("change", function () {
+				if (this.checked) {
+					const applied = applyPreferredColumns();
+					if (!applied) {
+						this.checked = false;
+					}
+				} else {
+					showAllColumns();
+				}
+			});
+		}
 
 		const govFilterCheckbox = document.getElementById('gov_filter');
 		const govOptionsDiv = document.getElementById('gov_options');

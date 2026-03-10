@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RDF v4.1 — ER Diagram</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f5f6f8;
+    color: #1a1a2e;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 24px;
+    background: linear-gradient(180deg, #f5f6f8 70%, transparent);
+    pointer-events: none;
+  }
+  #header > * { pointer-events: auto; }
+  #header h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700; color: #2563eb;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  #header h1 span { color: #94a3b8; font-weight: 400; }
+
+  .controls {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .controls button {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 500;
+    padding: 6px 14px; border-radius: 6px;
+    border: 1px solid #d1d5db; background: #fff; color: #64748b;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .controls button:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+
+  .legend {
+    position: fixed; bottom: 16px; left: 16px; z-index: 100;
+    display: flex; gap: 16px; font-size: 11px; color: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  #canvas-container {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    cursor: grab;
+  }
+  #canvas-container.grabbing { cursor: grabbing; }
+
+  #pan-layer {
+    position: absolute;
+    transform-origin: 0 0;
+  }
+
+  svg#connections {
+    position: absolute; top: 0; left: 0;
+    width: 6000px; height: 4000px;
+    pointer-events: none;
+  }
+  svg#connections path {
+    fill: none;
+    stroke-width: 1.5;
+    opacity: 0.35;
+    transition: opacity 0.3s;
+  }
+
+  .table-node {
+    position: absolute;
+    background: #ffffff;
+    border: 1px solid #e2e5ea;
+    border-radius: 10px;
+    min-width: 380px;
+    max-width: 440px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+    cursor: grab;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    user-select: none;
+  }
+  .table-node:hover {
+    border-color: #2563eb;
+    box-shadow: 0 4px 20px rgba(37,99,235,0.10), 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .table-node.dragging {
+    cursor: grabbing;
+    box-shadow: 0 8px 32px rgba(37,99,235,0.14);
+    border-color: #2563eb;
+    z-index: 50;
+  }
+
+  .table-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid #eef0f3;
+    display: flex; align-items: center; gap: 8px;
+    border-radius: 10px 10px 0 0;
+  }
+  .table-header .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .table-header .table-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; color: #1a1a2e;
+  }
+
+  .type-data .table-header { background: linear-gradient(135deg, #eff6ff, #f8fafc); }
+  .type-data .badge { background: #2563eb; color: #fff; }
+
+  .type-lookup .table-header { background: linear-gradient(135deg, #ecfdf5, #f8fafc); }
+  .type-lookup .badge { background: #16a34a; color: #fff; }
+
+  .table-fields {
+    padding: 4px 0;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .field {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .field:hover { background: #f1f5f9; cursor: pointer; }
+  .field.active { background: #eff6ff; border-left: 2px solid #2563eb; padding-left: 14px; }
+
+  #field-popup {
+    position: fixed; z-index: 200;
+    background: #ffffff;
+    border: 1px solid #2563eb;
+    border-radius: 10px;
+    padding: 16px 18px;
+    max-width: 400px; min-width: 260px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(37,99,235,0.08);
+    display: none;
+    font-size: 13px;
+    animation: popIn 0.15s ease-out;
+  }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.95) translateY(4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  #field-popup .popup-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; padding-bottom: 8px;
+    border-bottom: 1px solid #e2e5ea;
+  }
+  #field-popup .popup-field-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700; color: #2563eb;
+  }
+  #field-popup .popup-close {
+    background: none; border: none; color: #94a3b8;
+    font-size: 16px; cursor: pointer; padding: 0 4px;
+    line-height: 1;
+  }
+  #field-popup .popup-close:hover { color: #1a1a2e; }
+  #field-popup .popup-row { margin-bottom: 8px; }
+  #field-popup .popup-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 600; color: #64748b;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  #field-popup .popup-value {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; color: #1a1a2e; line-height: 1.5;
+  }
+  #field-popup .popup-values-list {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+  }
+  #field-popup .popup-val-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; padding: 2px 8px;
+    background: #eff6ff; color: #2563eb;
+    border: 1px solid #bfdbfe; border-radius: 4px;
+  }
+  #field-popup .popup-fk-ref {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; padding: 3px 8px;
+    background: #f5f3ff; color: #7c3aed;
+    border: 1px solid #ddd6fe; border-radius: 4px;
+    display: inline-block; margin-top: 4px;
+  }
+
+  .field .key-badge {
+    font-size: 8px; font-weight: 700;
+    padding: 1px 4px; border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .key-pk { background: #fef3c7; color: #b45309; }
+  .key-cpk { background: #fed7aa; color: #9a3412; }
+  .key-fk { background: #ede9fe; color: #7c3aed; }
+
+  .field .fname { color: #334155; }
+  .field .ftype { color: #94a3b8; margin-left: auto; flex-shrink: 0; }
+
+  .collapse-btn {
+    width: 100%; padding: 4px;
+    background: none; border: none; border-top: 1px solid #eef0f3;
+    color: #94a3b8; font-size: 10px; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    border-radius: 0 0 10px 10px;
+  }
+  .collapse-btn:hover { color: #2563eb; background: #f8fafc; }
+
+  .table-node.collapsed .table-fields { display: none; }
+  .table-node.collapsed .collapse-btn { border-top: none; }
+
+  .zoom-info {
+    position: fixed; bottom: 16px; right: 16px; z-index: 100;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #94a3b8;
+  }
+
+  /* ── Search ── */
+  .search-wrap {
+    position: relative;
+    display: flex; align-items: center;
+  }
+  .search-wrap input {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 6px 12px 6px 30px;
+    border: 1px solid #d1d5db; border-radius: 6px;
+    background: #fff; color: #1a1a2e;
+    width: 220px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .search-wrap input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .search-wrap input::placeholder { color: #94a3b8; }
+  .search-wrap .search-icon {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: #94a3b8; font-size: 13px; pointer-events: none;
+  }
+  .search-wrap .search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: #94a3b8;
+    font-size: 14px; cursor: pointer; padding: 2px 4px;
+    display: none; line-height: 1;
+  }
+  .search-wrap .search-clear:hover { color: #1a1a2e; }
+  .search-wrap .search-clear.visible { display: block; }
+
+  .search-results-bar {
+    position: fixed; top: 44px; left: 50%; transform: translateX(-50%);
+    z-index: 110;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #64748b;
+    background: #fff; border: 1px solid #e2e5ea;
+    border-radius: 6px; padding: 5px 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    display: none; align-items: center; gap: 10px;
+  }
+  .search-results-bar.visible { display: flex; }
+  .search-results-bar .nav-btn {
+    background: none; border: 1px solid #d1d5db;
+    border-radius: 4px; padding: 1px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #64748b;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .search-results-bar .nav-btn:hover { border-color: #2563eb; color: #2563eb; }
+
+  .field.search-match {
+    background: #fef9c3 !important;
+    border-left: 2px solid #eab308 !important;
+    padding-left: 14px !important;
+  }
+  .field.search-current {
+    background: #fde68a !important;
+    border-left: 3px solid #d97706 !important;
+    padding-left: 13px !important;
+  }
+  .table-node.search-has-match {
+    border-color: #eab308 !important;
+    box-shadow: 0 2px 16px rgba(234,179,8,0.15) !important;
+  }
+
+  /* ── Filter Panels ── */
+  .panel-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.15);
+    z-index: 150;
+    display: none;
+    animation: fadeIn 0.15s ease;
+  }
+  .panel-overlay.open { display: block; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .side-panel {
+    position: fixed; top: 0; right: -420px; bottom: 0;
+    width: 400px;
+    background: #ffffff;
+    border-left: 1px solid #e2e5ea;
+    box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+    z-index: 160;
+    transition: right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; flex-direction: column;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .side-panel.open { right: 0; }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e2e5ea;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .panel-header h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700; color: #1a1a2e;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .panel-close {
+    background: none; border: none; color: #94a3b8;
+    font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1;
+  }
+  .panel-close:hover { color: #1a1a2e; }
+
+  .panel-actions {
+    padding: 10px 20px;
+    border-bottom: 1px solid #eef0f3;
+    display: flex; gap: 8px; flex-shrink: 0;
+  }
+  .panel-actions button {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px; font-weight: 500;
+    padding: 4px 12px; border-radius: 5px;
+    border: 1px solid #d1d5db; background: #fff; color: #64748b;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .panel-actions button:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+  .panel-actions button.active-btn { border-color: #2563eb; color: #fff; background: #2563eb; }
+
+  .panel-body {
+    flex: 1; overflow-y: auto; padding: 8px 0;
+  }
+  .panel-body::-webkit-scrollbar { width: 5px; }
+  .panel-body::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+  .panel-section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 600; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 10px 20px 4px;
+  }
+
+  .panel-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 20px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .panel-item:hover { background: #f8fafc; }
+
+  .panel-item input[type="checkbox"] {
+    accent-color: #2563eb;
+    width: 15px; height: 15px;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .panel-item label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: #334155;
+    cursor: pointer; flex: 1;
+  }
+  .panel-item .item-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 600;
+    padding: 1px 6px; border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .item-badge-data { background: #eff6ff; color: #2563eb; }
+  .item-badge-lookup { background: #ecfdf5; color: #16a34a; }
+  .item-badge-count { background: #f1f5f9; color: #64748b; }
+
+  .panel-item.disabled label { color: #cbd5e1; text-decoration: line-through; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>RDF v4.1 <span>Entity-Relationship Diagram</span></h1>
+  <div class="controls">
+    <button onclick="resetView()">Reset View</button>
+    <button onclick="expandAll()">Expand All</button>
+    <button onclick="collapseAll()">Collapse All</button>
+    <button onclick="autoLayout()">Auto Layout</button>
+    <button onclick="openPanel('tables')" id="btn-tables">Filter Tables</button>
+    <button onclick="openPanel('fields')" id="btn-fields">Filter Fields</button>
+    <div class="search-wrap">
+      <span class="search-icon">&#x1F50D;</span>
+      <input type="text" id="search-input" placeholder="Search fields..." oninput="onSearch(this.value)" onkeydown="onSearchKey(event)">
+      <button class="search-clear" id="search-clear" onclick="clearSearch()">&times;</button>
+    </div>
+  </div>
+</div>
+
+<div class="search-results-bar" id="search-bar">
+  <span id="search-count">0 results</span>
+  <button class="nav-btn" onclick="navSearch(-1)">&#9650; Prev</button>
+  <button class="nav-btn" onclick="navSearch(1)">&#9660; Next</button>
+  <button class="nav-btn" onclick="clearSearch()">Clear</button>
+</div>
+
+<!-- Tables Filter Panel -->
+<div class="panel-overlay" id="panel-overlay" onclick="closePanel()"></div>
+<div class="side-panel" id="panel-tables">
+  <div class="panel-header">
+    <h2>Filter Tables</h2>
+    <button class="panel-close" onclick="closePanel()">&times;</button>
+  </div>
+  <div class="panel-actions">
+    <button onclick="toggleAllTables(true)">Show All</button>
+    <button onclick="toggleAllTables(false)">Hide All</button>
+    <button onclick="showOnlyData()">Data Only</button>
+    <button onclick="showOnlyLookups()">Lookups Only</button>
+  </div>
+  <div class="panel-body" id="tables-list"></div>
+</div>
+
+<!-- Fields Filter Panel -->
+<div class="side-panel" id="panel-fields">
+  <div class="panel-header">
+    <h2>Filter Fields</h2>
+    <button class="panel-close" onclick="closePanel()">&times;</button>
+  </div>
+  <div class="panel-actions">
+    <button onclick="toggleAllTopics(true)">Show All</button>
+    <button onclick="toggleAllTopics(false)">Hide All</button>
+    <button onclick="showKeysOnly()">Keys Only</button>
+    <button onclick="showRelevantFields()">Relevant</button>
+  </div>
+  <div class="panel-body" id="fields-list"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div> Data Table</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Lookup Table</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#b45309"></div> PK</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> FK</div>
+  <div class="legend-item" style="color:#30363d">Drag tables · Scroll to zoom · Click field for details</div>
+</div>
+
+<div class="zoom-info" id="zoom-info">100%</div>
+
+<div id="canvas-container">
+  <div id="pan-layer">
+    <svg id="connections"></svg>
+  </div>
+</div>
+
+<div id="field-popup">
+  <div class="popup-header">
+    <span class="popup-field-name" id="popup-fname"></span>
+    <button class="popup-close" onclick="closePopup()">&times;</button>
+  </div>
+  <div id="popup-body"></div>
+</div>
+
+<script>
+const schema = {
+  ACCOUNTS: {
+    type: 'data',
+    fields: [
+      { name: 'ACCOUNT_ID', type: 'N', key: 'PK' },
+      { name: 'ACCOUNT_NAME', type: 'A(100)' },
+      { name: 'ACCOUNT_TRADE_NAME', type: 'A(100)' },
+      { name: 'ACCOUNT_STREET1', type: 'A(64)' },
+      { name: 'ACCOUNT_STREET2', type: 'A(64)' },
+      { name: 'ACCOUNT_CITY', type: 'A(34)' },
+      { name: 'ACCOUNT_POSTAL_STATE', type: 'A(30)' },
+      { name: 'ACCOUNT_POSTAL_CODE', type: 'A(10)' },
+      { name: 'ACCOUNT_COUNTRY', type: 'A(50)' },
+      { name: 'ACCOUNT_PHONE', type: 'A(50)' },
+      { name: 'ACCOUNT_FAX', type: 'A(50)' },
+      { name: 'ACCOUNT_URL', type: 'A(255)' },
+      { name: 'ACCOUNT_EMPLOYEES', type: 'N' },
+      { name: 'ACCOUNT_IT_EMPLOYEES', type: 'N' },
+      { name: 'ACCOUNT_REVENUE_USD', type: 'N' },
+      { name: 'ACCOUNT_REVENUE_EUROS', type: 'N' },
+      { name: 'ACCOUNT_REVENUE_POUNDS', type: 'N' },
+      { name: 'ACCOUNT_ICT_SPENDING', type: 'N' },
+      { name: 'ACCOUNT_HW_SPENDING', type: 'N' },
+      { name: 'ACCOUNT_SW_SPENDING', type: 'N' },
+      { name: 'ACCOUNT_IT_COMNET_SPENDING', type: 'N' },
+      { name: 'ACCOUNT_IT_SERVICES_SPENDING', type: 'N' },
+      { name: 'ACCOUNT_IT_STAFF_SPENDING', type: 'N' },
+      { name: 'ACCOUNT_TELCO_SPENDING', type: 'N' },
+      { name: 'ACCOUNT_NB_SITES', type: 'N' },
+      { name: 'ACCOUNT_NB_COUNTRIES', type: 'N' },
+      { name: 'ACCOUNT_PRI_NAICS6_CODE', type: 'A(6)', key: 'FK' },
+      { name: 'ACCOUNT_SEC_NAICS6_CODE', type: 'A(6)', key: 'FK' },
+      { name: 'ACCOUNT_PRI_SIC4_CODE', type: 'A(4)', key: 'FK' },
+      { name: 'ACCOUNT_SEC_SIC4_CODE', type: 'A(4)', key: 'FK' },
+      { name: 'ACCOUNT_NACE4_CODE', type: 'A(5)', key: 'FK' },
+      { name: 'ACCOUNT_CONTINENT', type: 'A(50)' },
+      { name: 'ACCOUNT_COUNTRY_GROUPING_CODE', type: 'A(20)' },
+      { name: 'ACCOUNT_COUNTRY_CODE', type: 'A(2)' },
+      { name: 'ACCOUNT_REGION', type: 'A(35)' },
+      { name: 'ACCOUNT_SUBREGION', type: 'A(60)' },
+      { name: 'ACCOUNT_STATE', type: 'A(30)' },
+      { name: 'ACCOUNT_COUNTY', type: 'A(50)' },
+      { name: 'ACCOUNT_SERVERS', type: 'N' },
+      { name: 'ACCOUNT_WORKSTATIONS', type: 'N' },
+      { name: 'ACCOUNT_PCS', type: 'N' },
+      { name: 'ACCOUNT_DESKTOPS', type: 'N' },
+      { name: 'ACCOUNT_LAPTOPS', type: 'N' },
+      { name: 'ACCOUNT_TABLETS', type: 'N' },
+      { name: 'ACCOUNT_PRINTERS', type: 'N' },
+      { name: 'ACCOUNT_STORAGE', type: 'N' },
+      { name: 'ACCOUNT_AOD_URL', type: 'A(48)' },
+    ]
+  },
+  ACCOUNT_BUSINESS_LISTS: {
+    type: 'data',
+    fields: [
+      { name: 'BUSINESS_LIST_ID', type: 'N', key: 'CPK' },
+      { name: 'BUSINESS_LIST', type: 'A(30)' },
+      { name: 'ACCOUNT_RANKING', type: 'N' },
+      { name: 'ACCOUNT_ID', type: 'N', key: 'CPK' },
+      { name: 'ACCOUNT_NAME', type: 'A(100)' },
+    ]
+  },
+  SITES: {
+    type: 'data',
+    fields: [
+      { name: 'SITE_ID', type: 'N', key: 'PK' },
+      { name: 'ACCOUNT_ID', type: 'N', key: 'FK' },
+      { name: 'SITE_NAME', type: 'A(120)' },
+      { name: 'SITE_TRADE_NAME', type: 'A(90)' },
+      { name: 'SITE_STREET1', type: 'A(100)' },
+      { name: 'SITE_STREET2', type: 'A(100)' },
+      { name: 'SITE_CITY', type: 'A(34)' },
+      { name: 'SITE_POSTAL_STATE', type: 'A(30)' },
+      { name: 'SITE_POSTAL_CODE', type: 'A(10)' },
+      { name: 'SITE_COUNTRY', type: 'A(50)' },
+      { name: 'SITE_PHONE', type: 'A(50)' },
+      { name: 'SITE_FAX', type: 'A(50)' },
+      { name: 'SITE_URL', type: 'A(255)' },
+      { name: 'SITE_URL_DOMAIN', type: 'A(255)' },
+      { name: 'SITE_LANGUAGE', type: 'A(50)' },
+      { name: 'SITE_TYPE', type: 'A(2)' },
+      { name: 'SITE_LEGAL_STATUS', type: 'A(110)' },
+      { name: 'SITE_START_YEAR', type: 'A(4)' },
+      { name: 'SITE_REG_CODE', type: 'A(20)' },
+      { name: 'SITE_VAT_CODE', type: 'A(20)' },
+      { name: 'SITE_EMPLOYEES', type: 'N' },
+      { name: 'SITE_IT_EMPLOYEES', type: 'N' },
+      { name: 'SITE_REVENUE_USD', type: 'N' },
+      { name: 'SITE_REVENUE_EUROS', type: 'N' },
+      { name: 'SITE_REVENUE_POUNDS', type: 'N' },
+      { name: 'SITE_ICT_SPENDING', type: 'N' },
+      { name: 'SITE_HW_SPENDING', type: 'N' },
+      { name: 'SITE_SW_SPENDING', type: 'N' },
+      { name: 'SITE_IT_COMNET_SPENDING', type: 'N' },
+      { name: 'SITE_IT_SERVICES_SPENDING', type: 'N' },
+      { name: 'SITE_IT_STAFF_SPENDING', type: 'N' },
+      { name: 'SITE_TELCO_SPENDING', type: 'N' },
+      { name: 'SITE_VEHICLE_FLEET', type: 'N' },
+      { name: 'SITE_PRI_NAICS6_CODE', type: 'A(6)', key: 'FK' },
+      { name: 'SITE_SEC_NAICS6_CODE', type: 'A(6)', key: 'FK' },
+      { name: 'SITE_PRI_SIC4_CODE', type: 'A(4)', key: 'FK' },
+      { name: 'SITE_SEC_SIC4_CODE', type: 'A(4)', key: 'FK' },
+      { name: 'SITE_GOVT_LEVEL', type: 'A(7)' },
+      { name: 'SITE_NACE4_CODE', type: 'A(5)', key: 'FK' },
+      { name: 'SITE_CONTINENT', type: 'A(5)' },
+      { name: 'SITE_COUNTRY_GROUPING_CODE', type: 'A(20)' },
+      { name: 'SITE_COUNTRY_CODE', type: 'A(2)' },
+      { name: 'SITE_REGION', type: 'A(35)' },
+      { name: 'SITE_SUBREGION', type: 'A(60)' },
+      { name: 'SITE_STATE', type: 'A(30)' },
+      { name: 'SITE_COUNTY', type: 'A(50)' },
+      { name: 'SITE_CBSA_CODE', type: 'A(5)' },
+      { name: 'SITE_CBSA', type: 'A(50)' },
+      { name: 'SITE_CBSA_TYPE', type: 'A(4)' },
+      { name: 'SITE_CSA_CODE', type: 'A(3)' },
+      { name: 'SITE_CSA', type: 'A(60)' },
+      { name: 'SITE_NUTS1_CODE', type: 'A(3)' },
+      { name: 'SITE_NUTS1_DESC', type: 'A(150)' },
+      { name: 'SITE_NUTS2_CODE', type: 'A(4)' },
+      { name: 'SITE_NUTS2_DESC', type: 'A(150)' },
+      { name: 'SITE_NUTS3_CODE', type: 'A(5)' },
+      { name: 'SITE_NUTS3_DESC', type: 'A(150)' },
+      { name: 'SITE_POSTAL_SECTOR', type: 'A(3)' },
+      { name: 'SITE_LATITUDE', type: 'A(9)' },
+      { name: 'SITE_LONGITUDE', type: 'A(10)' },
+      { name: 'SITE_SERVERS', type: 'N' },
+      { name: 'SITE_WORKSTATIONS', type: 'N' },
+      { name: 'SITE_PCS', type: 'N' },
+      { name: 'SITE_DESKTOPS', type: 'N' },
+      { name: 'SITE_LAPTOPS', type: 'N' },
+      { name: 'SITE_TABLETS', type: 'N' },
+      { name: 'SITE_PRINTERS', type: 'N' },
+      { name: 'SITE_STORAGE', type: 'N' },
+      { name: 'ACCOUNT_EMPLOYEES_DOMESTIC', type: 'N' },
+      { name: 'ACCOUNT_IT_EMPLOYEES_DOMESTIC', type: 'N' },
+      { name: 'ACCOUNT_REVENUE_DOMESTIC', type: 'N' },
+      { name: 'ACCOUNT_NB_SITES_DOMESTIC', type: 'N' },
+      { name: 'ACCOUNT_PCS_DOMESTIC', type: 'N' },
+      { name: 'SITE_AOD_URL', type: 'A(52)' },
+    ]
+  },
+  CONTACTS: {
+    type: 'data',
+    fields: [
+      { name: 'CONTACT_ID', type: 'N', key: 'PK' },
+      { name: 'SITE_ID', type: 'N', key: 'FK' },
+      { name: 'PREFIX', type: 'A(10)' },
+      { name: 'FIRST_NAME', type: 'A(100)' },
+      { name: 'MIDDLE_NAME', type: 'A(100)' },
+      { name: 'LAST_NAME', type: 'A(100)' },
+      { name: 'JOB_TITLE', type: 'A(155)' },
+      { name: 'JOB_FUNCTION_CODES', type: 'A(50)' },
+      { name: 'JOB_FUNCTION_1', type: 'A(50)' },
+      { name: 'JOB_FUNCTION_2', type: 'A(50)' },
+      { name: 'JOB_FUNCTION_3', type: 'A(50)' },
+      { name: 'DEPARTMENT_1', type: 'A(64)' },
+      { name: 'DEPARTMENT_2', type: 'A(64)' },
+      { name: 'DEPARTMENT_3', type: 'A(64)' },
+      { name: 'JOB_LEVEL', type: 'A(50)' },
+      { name: 'CONTACT_CONTINENT', type: 'A(50)' },
+      { name: 'CONTACT_COUNTRY_GROUPING_CODE', type: 'A(20)' },
+      { name: 'CONTACT_COUNTRY', type: 'A(50)' },
+      { name: 'CONTACT_COUNTRY_CODE', type: 'A(2)' },
+      { name: 'CONTACT_PHONE_DIRECT_OFF', type: 'A(40)' },
+      { name: 'CONTACT_PHONE_DIRECT_MOB', type: 'A(40)' },
+      { name: 'EMAIL', type: 'A(255)' },
+      { name: 'EMAIL_STATUS', type: 'A(20)' },
+      { name: 'EMAIL_VALIDATION_DATE', type: 'D' },
+      { name: 'CONTACT_CONFIDENCE_RANKING', type: 'N' },
+      { name: 'CONTACT_TYPE', type: 'A(1)' },
+      { name: 'CONTACT_LANGUAGE', type: 'A(50)' },
+      { name: 'JOB_TITLE_CHANGE_DATE', type: 'D' },
+      { name: 'EMAIL_CHANGE_DATE', type: 'D' },
+      { name: 'ACCOUNT_CHANGE_DATE', type: 'D' },
+      { name: 'CONTACT_AOD_URL', type: 'A(57)' },
+      { name: 'CONTACT_LDIN_URL', type: 'A(255)' },
+    ]
+  },
+  SITES_TECHNOLOGY: {
+    type: 'data',
+    fields: [
+      { name: 'TECH_ID', type: 'N', key: 'PK' },
+      { name: 'SITE_ID', type: 'N' },
+      { name: 'PRODUCT_ID', type: 'N', key: 'FK' },
+      { name: 'PRODUCT_VENDOR', type: 'A(80)' },
+      { name: 'PRODUCT', type: 'A(255)' },
+      { name: 'PRODUCT_FIRST_SEEN_DATE', type: 'D' },
+      { name: 'PRODUCT_CONFIDENCE_RANKING', type: 'N' },
+    ]
+  },
+  TECHNOLOGY_LooKuP: {
+    type: 'lookup',
+    fields: [
+      { name: 'PRODUCT_ID', type: 'N', key: 'PK' },
+      { name: 'PRODUCT_SERIES', type: 'A(65)' },
+      { name: 'PRODUCT_CATEGORY', type: 'A(255)' },
+      { name: 'PRODUCT_VENDOR', type: 'A(80)' },
+      { name: 'PRODUCT_VENDOR_URL', type: 'A(255)' },
+      { name: 'PRODUCT', type: 'A(255)' },
+      { name: 'PRODUCT_HOSTING', type: 'A(25)' },
+      { name: 'PRODUCT_URL', type: 'A(255)' },
+    ]
+  },
+  NAICS_LooKuP: {
+    type: 'lookup',
+    fields: [
+      { name: 'NAICS6_CODE', type: 'A(6)', key: 'PK' },
+      { name: 'NAICS6_DESC', type: 'A(255)' },
+      { name: 'NAICS5_CODE', type: 'A(5)' },
+      { name: 'NAICS5_DESC', type: 'A(255)' },
+      { name: 'NAICS4_CODE', type: 'A(4)' },
+      { name: 'NAICS4_DESC', type: 'A(255)' },
+      { name: 'NAICS3_CODE', type: 'A(3)' },
+      { name: 'NAICS3_DESC', type: 'A(255)' },
+      { name: 'NAICS2_CODE', type: 'A(2)' },
+      { name: 'NAICS2_DESC', type: 'A(255)' },
+      { name: 'NAICS_SUBINDUSTRY', type: 'A(255)' },
+      { name: 'NAICS_INDUSTRY', type: 'A(255)' },
+    ]
+  },
+  SIC_LooKuP: {
+    type: 'lookup',
+    fields: [
+      { name: 'SIC4_CODE', type: 'A(4)', key: 'PK' },
+      { name: 'SIC4_DESC', type: 'A(255)' },
+      { name: 'SIC3_CODE', type: 'A(3)' },
+      { name: 'SIC3_DESC', type: 'A(255)' },
+      { name: 'SIC2_CODE', type: 'A(2)' },
+      { name: 'SIC2_DESC', type: 'A(255)' },
+      { name: 'SIC1_CODE', type: 'A(1)' },
+      { name: 'SIC1_DESC', type: 'A(255)' },
+      { name: 'SIC_SUBINDUSTRY', type: 'A(255)' },
+      { name: 'SIC_INDUSTRY', type: 'A(255)' },
+    ]
+  },
+  NACE_LooKuP: {
+    type: 'lookup',
+    fields: [
+      { name: 'NACE4_CODE', type: 'A(5)', key: 'PK' },
+      { name: 'NACE4_DESC', type: 'A(150)' },
+      { name: 'NACE3_CODE', type: 'A(4)' },
+      { name: 'NACE3_DESC', type: 'A(150)' },
+      { name: 'NACE2_CODE', type: 'A(2)' },
+      { name: 'NACE2_DESC', type: 'A(150)' },
+      { name: 'NACE1_CODE', type: 'A(1)' },
+      { name: 'NACE1_DESC', type: 'A(150)' },
+      { name: 'NACE_SUBINDUSTRY', type: 'A(100)' },
+      { name: 'NACE_INDUSTRY', type: 'A(100)' },
+    ]
+  },
+  IDs_LooKuP: {
+    type: 'lookup',
+    fields: [
+      { name: 'AOD_ID', type: 'N', key: 'CPK' },
+      { name: 'AOD_ID_NAME', type: 'A(10)' },
+      { name: 'AOD_ALT_ID', type: 'A(255)', key: 'CPK' },
+      { name: 'AOD_ALT_ID_NAME', type: 'A(17)' },
+    ]
+  },
+  DUNS_LooKuP: {
+    type: 'lookup',
+    fields: [
+      { name: 'AOD_ID', type: 'N', key: 'CPK' },
+      { name: 'AOD_ID_NAME', type: 'A(10)' },
+      { name: 'DUNS_NUMBER', type: 'A(9)' },
+      { name: 'DUNS_NUMBER_NAME', type: 'A(12)', key: 'CPK' },
+    ]
+  },
+};
+
+/* Field definitions from Data Dictionary v4.1 — ALL 213 fields */
+const fieldDefs = {
+  // ── ACCOUNTS (47 fields) ──
+  'ACCOUNTS.ACCOUNT_ID': { def: 'Account ID (unique key)', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_NAME': { def: 'Legal/Registered Name of the Account', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_TRADE_NAME': { def: 'DBA/Operating Name of the Account', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_STREET1': { def: 'Street Address 1 of the Account HQ', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_STREET2': { def: 'Street Address 2 of the Account HQ', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_CITY': { def: 'City of the Account HQ', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_POSTAL_STATE': { def: 'Postal State of the Account HQ (CA/ES/IT: Province, IN/US: State)', topic: 'Identification', applies: 'CA/ES/IN/IT/US' },
+  'ACCOUNTS.ACCOUNT_POSTAL_CODE': { def: 'Postal Code of the Account HQ', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_COUNTRY': { def: 'Country of the Account HQ', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_PHONE': { def: 'Switchboard Phone Number of the Account HQ', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_FAX': { def: 'Fax Number of the Account HQ', topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_URL': { def: "Account's Website", topic: 'Identification' },
+  'ACCOUNTS.ACCOUNT_EMPLOYEES': { def: 'Nb of Account Employees', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_IT_EMPLOYEES': { def: 'Nb of Account IT Employees', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_REVENUE_USD': { def: 'Annual Account Revenue in US Dollars (USD)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_REVENUE_EUROS': { def: 'Annual Account Revenue in Euros (EUR)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_REVENUE_POUNDS': { def: 'Annual Account Revenue in Pounds Sterling (GBP)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_ICT_SPENDING': { def: 'Annual Account ICT Spending (USD)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_HW_SPENDING': { def: 'Annual Account ICT Spending: Hardware (USD)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_SW_SPENDING': { def: 'Annual Account ICT Spending: Software (USD)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_IT_COMNET_SPENDING': { def: 'Annual Account ICT Spending: IT Communications/Network (USD)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_IT_SERVICES_SPENDING': { def: 'Annual Account ICT Spending: IT Services (USD)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_IT_STAFF_SPENDING': { def: 'Annual Account ICT Spending: IT Staff (USD)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_TELCO_SPENDING': { def: 'Annual Account ICT Spending: Telecommunications (USD)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_NB_SITES': { def: 'Nb of Sites which report to the Account (Worldwide)', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_NB_COUNTRIES': { def: 'Nb of Countries in which the Account has site locations', topic: 'Sizing' },
+  'ACCOUNTS.ACCOUNT_PRI_NAICS6_CODE': { def: 'Primary National Industry-level NAICS Code of the Account HQ (6-digit)', topic: 'Industry', fk: 'NAICS_LooKuP.NAICS6_CODE' },
+  'ACCOUNTS.ACCOUNT_SEC_NAICS6_CODE': { def: 'Secondary National Industry-level NAICS Code of the Account HQ (6-digit)', topic: 'Industry', fk: 'NAICS_LooKuP.NAICS6_CODE' },
+  'ACCOUNTS.ACCOUNT_PRI_SIC4_CODE': { def: 'Primary Industry-level SIC Code of the Account HQ (4-digit)', topic: 'Industry', fk: 'SIC_LooKuP.SIC4_CODE' },
+  'ACCOUNTS.ACCOUNT_SEC_SIC4_CODE': { def: 'Secondary Industry-level SIC Code of the Account HQ (4-digit)', topic: 'Industry', fk: 'SIC_LooKuP.SIC4_CODE' },
+  'ACCOUNTS.ACCOUNT_NACE4_CODE': { def: 'Class-level NACE Code of the Account HQ (4-digit)', topic: 'Industry', fk: 'NACE_LooKuP.NACE4_CODE' },
+  'ACCOUNTS.ACCOUNT_CONTINENT': { def: 'Continent of the Account HQ', topic: 'Location' },
+  'ACCOUNTS.ACCOUNT_COUNTRY_GROUPING_CODE': { def: 'Country Grouping of the Account HQ', topic: 'Location', values: ['APac','EMEA','LatAm','NA'] },
+  'ACCOUNTS.ACCOUNT_COUNTRY_CODE': { def: 'ISO 3166-1 alpha-2 Country Code of the Account HQ', topic: 'Location' },
+  'ACCOUNTS.ACCOUNT_REGION': { def: 'Region of the Account HQ', topic: 'Location', applies: 'CA/DE/ES/FR/GB/IE/IN/IT/RU/US' },
+  'ACCOUNTS.ACCOUNT_SUBREGION': { def: 'Subregion of the Account HQ', topic: 'Location', applies: 'CA/DE/ES/FR/GB/IT/RU/US' },
+  'ACCOUNTS.ACCOUNT_STATE': { def: 'State of the Account HQ', topic: 'Location', applies: 'IN/US' },
+  'ACCOUNTS.ACCOUNT_COUNTY': { def: 'County of the Account HQ', topic: 'Location', applies: 'DE/FR/GB/IE/IN/US' },
+  'ACCOUNTS.ACCOUNT_SERVERS': { def: 'Nb of Account Servers', topic: 'Technology Totals' },
+  'ACCOUNTS.ACCOUNT_WORKSTATIONS': { def: 'Nb of Account Workstations', topic: 'Technology Totals' },
+  'ACCOUNTS.ACCOUNT_PCS': { def: 'Nb of Account PCs', topic: 'Technology Totals' },
+  'ACCOUNTS.ACCOUNT_DESKTOPS': { def: 'Nb of Account Desktop PCs', topic: 'Technology Totals' },
+  'ACCOUNTS.ACCOUNT_LAPTOPS': { def: 'Nb of Account Laptop PCs', topic: 'Technology Totals' },
+  'ACCOUNTS.ACCOUNT_TABLETS': { def: 'Nb of Account Tablets', topic: 'Technology Totals' },
+  'ACCOUNTS.ACCOUNT_PRINTERS': { def: 'Nb of Account Printers', topic: 'Technology Totals' },
+  'ACCOUNTS.ACCOUNT_STORAGE': { def: 'Account Storage Capacity', topic: 'Technology Totals' },
+  'ACCOUNTS.ACCOUNT_AOD_URL': { def: "Account's AoD URL", topic: 'Identification' },
+
+  // ── ACCOUNT_BUSINESS_LISTS (5 fields) ──
+  'ACCOUNT_BUSINESS_LISTS.BUSINESS_LIST_ID': { def: 'Business List ID (composite key)' },
+  'ACCOUNT_BUSINESS_LISTS.BUSINESS_LIST': { def: 'Business List Name', values: ['Fortune 500','Forbes Global 2000','Inc. 5000','FTSE 100','...'] },
+  'ACCOUNT_BUSINESS_LISTS.ACCOUNT_RANKING': { def: 'Account Ranking within the Business List' },
+  'ACCOUNT_BUSINESS_LISTS.ACCOUNT_ID': { def: 'Account ID (composite key)' },
+  'ACCOUNT_BUSINESS_LISTS.ACCOUNT_NAME': { def: 'Legal/Registered Name of the Account' },
+
+  // ── SITES (74 fields) ──
+  'SITES.SITE_ID': { def: 'Site ID (unique key)', topic: 'Identification' },
+  'SITES.ACCOUNT_ID': { def: 'Account ID — links this site to its parent Account', topic: 'Identification', fk: 'ACCOUNTS.ACCOUNT_ID' },
+  'SITES.SITE_NAME': { def: 'Legal/Registered Name of the Site Location', topic: 'Identification' },
+  'SITES.SITE_TRADE_NAME': { def: 'DBA/Operating Name of the Site Location', topic: 'Identification' },
+  'SITES.SITE_STREET1': { def: 'Street Address 1 of the Site Location', topic: 'Identification' },
+  'SITES.SITE_STREET2': { def: 'Street Address 2 of the Site Location', topic: 'Identification' },
+  'SITES.SITE_CITY': { def: 'City of the Site Location', topic: 'Identification' },
+  'SITES.SITE_POSTAL_STATE': { def: 'Postal State of the Site (CA/ES/IT: Province, IN/US: State)', topic: 'Identification', applies: 'CA/ES/IN/IT/US' },
+  'SITES.SITE_POSTAL_CODE': { def: 'Postal Code of the Site Location', topic: 'Identification' },
+  'SITES.SITE_COUNTRY': { def: 'Country of the Site Location', topic: 'Identification' },
+  'SITES.SITE_PHONE': { def: 'Switchboard Phone Number of the Site', topic: 'Identification' },
+  'SITES.SITE_FAX': { def: 'Fax Number of the Site', topic: 'Identification' },
+  'SITES.SITE_URL': { def: "Company's Website (ex: va.gov/health)", topic: 'Identification' },
+  'SITES.SITE_URL_DOMAIN': { def: "Company's URL Domain (ex: va.gov)", topic: 'Identification' },
+  'SITES.SITE_LANGUAGE': { def: 'Language at Site', topic: 'Identification' },
+  'SITES.SITE_TYPE': { def: 'Site Type — hierarchical role within the corporate structure', topic: 'Identification', values: ['St = Single (sole location)','UH = Ultimate HQ (global parent)','HQ = Headquarters (subsidiary/regional)','Br = Branch','Ph = Phantom (non-physical record)'] },
+  'SITES.SITE_LEGAL_STATUS': { def: "Site's Legal Status", topic: 'Identification' },
+  'SITES.SITE_START_YEAR': { def: "Site's Year of Establishment", topic: 'Identification' },
+  'SITES.SITE_REG_CODE': { def: "Company's Registration Code", topic: 'Identification', applies: 'European countries' },
+  'SITES.SITE_VAT_CODE': { def: "Company's VAT code", topic: 'Identification', applies: 'European countries' },
+  'SITES.SITE_EMPLOYEES': { def: 'Nb of Site Employees', topic: 'Sizing' },
+  'SITES.SITE_IT_EMPLOYEES': { def: 'Nb of Site IT Employees', topic: 'Sizing' },
+  'SITES.SITE_REVENUE_USD': { def: 'Annual Site Revenue in US Dollars (USD)', topic: 'Sizing' },
+  'SITES.SITE_REVENUE_EUROS': { def: 'Annual Site Revenue in Euros (EUR)', topic: 'Sizing' },
+  'SITES.SITE_REVENUE_POUNDS': { def: 'Annual Site Revenue in Pounds Sterling (GBP)', topic: 'Sizing' },
+  'SITES.SITE_ICT_SPENDING': { def: 'Annual Site ICT Spending (USD)', topic: 'Sizing' },
+  'SITES.SITE_HW_SPENDING': { def: 'Annual Site ICT Spending: Hardware (USD)', topic: 'Sizing' },
+  'SITES.SITE_SW_SPENDING': { def: 'Annual Site ICT Spending: Software (USD)', topic: 'Sizing' },
+  'SITES.SITE_IT_COMNET_SPENDING': { def: 'Annual Site ICT Spending: IT Communications/Network (USD)', topic: 'Sizing' },
+  'SITES.SITE_IT_SERVICES_SPENDING': { def: 'Annual Site ICT Spending: IT Services (USD)', topic: 'Sizing' },
+  'SITES.SITE_IT_STAFF_SPENDING': { def: 'Annual Site ICT Spending: IT Staff (USD)', topic: 'Sizing' },
+  'SITES.SITE_TELCO_SPENDING': { def: 'Annual Site ICT Spending: Telecommunications (USD)', topic: 'Sizing' },
+  'SITES.SITE_VEHICLE_FLEET': { def: "Site's Vehicle Fleet", topic: 'Sizing', applies: 'US' },
+  'SITES.SITE_PRI_NAICS6_CODE': { def: 'Primary NAICS Code of the Site (6-digit)', topic: 'Industry', fk: 'NAICS_LooKuP.NAICS6_CODE' },
+  'SITES.SITE_SEC_NAICS6_CODE': { def: 'Secondary NAICS Code of the Site (6-digit)', topic: 'Industry', fk: 'NAICS_LooKuP.NAICS6_CODE' },
+  'SITES.SITE_PRI_SIC4_CODE': { def: 'Primary SIC Code of the Site (4-digit)', topic: 'Industry', fk: 'SIC_LooKuP.SIC4_CODE' },
+  'SITES.SITE_SEC_SIC4_CODE': { def: 'Secondary SIC Code of the Site (4-digit)', topic: 'Industry', fk: 'SIC_LooKuP.SIC4_CODE' },
+  'SITES.SITE_GOVT_LEVEL': { def: 'Government Level of the Site', topic: 'Industry', values: ['Federal','State','Local'], applies: 'US' },
+  'SITES.SITE_NACE4_CODE': { def: 'Class-level NACE Code of the Site (4-digit)', topic: 'Industry', fk: 'NACE_LooKuP.NACE4_CODE', applies: 'European countries' },
+  'SITES.SITE_CONTINENT': { def: 'Continent of the Site Location', topic: 'Location' },
+  'SITES.SITE_COUNTRY_GROUPING_CODE': { def: 'Country Grouping of the Site', topic: 'Location', values: ['APac','EMEA','LatAm','NA'] },
+  'SITES.SITE_COUNTRY_CODE': { def: 'ISO 3166-1 alpha-2 Country Code of the Site', topic: 'Location' },
+  'SITES.SITE_REGION': { def: "Site's Region", topic: 'Location', applies: 'CA/DE/ES/FR/GB/IE/IN/IT/RU/US' },
+  'SITES.SITE_SUBREGION': { def: "Site's SubRegion", topic: 'Location', applies: 'CA/DE/ES/FR/GB/IT/RU/US' },
+  'SITES.SITE_STATE': { def: "Site's State", topic: 'Location', applies: 'IN/US' },
+  'SITES.SITE_COUNTY': { def: "Site's County (DE: Kreis, FR: Département, GB/IE/US: County)", topic: 'Location', applies: 'DE/FR/GB/IE/IN/US' },
+  'SITES.SITE_CBSA_CODE': { def: "Site's Core-Based Statistical Area Code", topic: 'Location', applies: 'US' },
+  'SITES.SITE_CBSA': { def: "Site's Core-Based Statistical Area", topic: 'Location', applies: 'US' },
+  'SITES.SITE_CBSA_TYPE': { def: "Site's CBSA Type", topic: 'Location', values: ['MSA = Metropolitan','\u00b5SA = Micropolitan'], applies: 'US' },
+  'SITES.SITE_CSA_CODE': { def: "Site's Combined Statistical Area Code", topic: 'Location', applies: 'US' },
+  'SITES.SITE_CSA': { def: "Site's Combined Statistical Area", topic: 'Location', applies: 'US' },
+  'SITES.SITE_NUTS1_CODE': { def: "Site's level-1 NUTS code", topic: 'Location', applies: 'European countries' },
+  'SITES.SITE_NUTS1_DESC': { def: "Site's level-1 NUTS description", topic: 'Location', applies: 'European countries' },
+  'SITES.SITE_NUTS2_CODE': { def: "Site's level-2 NUTS code", topic: 'Location', applies: 'European countries' },
+  'SITES.SITE_NUTS2_DESC': { def: "Site's level-2 NUTS description", topic: 'Location', applies: 'European countries' },
+  'SITES.SITE_NUTS3_CODE': { def: "Site's level-3 NUTS code", topic: 'Location', applies: 'European countries' },
+  'SITES.SITE_NUTS3_DESC': { def: "Site's level-3 NUTS description", topic: 'Location', applies: 'European countries' },
+  'SITES.SITE_POSTAL_SECTOR': { def: "Site's Postal Code Sector", topic: 'Location' },
+  'SITES.SITE_LATITUDE': { def: "Site's Latitude", topic: 'Location' },
+  'SITES.SITE_LONGITUDE': { def: "Site's Longitude", topic: 'Location' },
+  'SITES.SITE_SERVERS': { def: 'Nb of Site Servers', topic: 'Technology Totals' },
+  'SITES.SITE_WORKSTATIONS': { def: 'Nb of Site Workstations', topic: 'Technology Totals' },
+  'SITES.SITE_PCS': { def: 'Nb of PCs on Site', topic: 'Technology Totals' },
+  'SITES.SITE_DESKTOPS': { def: 'Nb of Desktop PCs on Site', topic: 'Technology Totals' },
+  'SITES.SITE_LAPTOPS': { def: 'Nb of Laptop PCs on Site', topic: 'Technology Totals' },
+  'SITES.SITE_TABLETS': { def: 'Nb of Tablets on Site', topic: 'Technology Totals' },
+  'SITES.SITE_PRINTERS': { def: 'Nb of Printers on Site', topic: 'Technology Totals' },
+  'SITES.SITE_STORAGE': { def: 'Site Storage Capacity', topic: 'Technology Totals' },
+  'SITES.ACCOUNT_EMPLOYEES_DOMESTIC': { def: 'Nb of Account Employees in the Country', topic: 'Domestic Sizing' },
+  'SITES.ACCOUNT_IT_EMPLOYEES_DOMESTIC': { def: 'Nb of Account IT Employees in the Country', topic: 'Domestic Sizing' },
+  'SITES.ACCOUNT_REVENUE_DOMESTIC': { def: 'Annual Account Revenue in the Country (USD)', topic: 'Domestic Sizing' },
+  'SITES.ACCOUNT_NB_SITES_DOMESTIC': { def: 'Nb of Sites which report to the Account in the Country', topic: 'Domestic Sizing' },
+  'SITES.ACCOUNT_PCS_DOMESTIC': { def: 'Nb of Account PCs in the Country', topic: 'Domestic Sizing' },
+  'SITES.SITE_AOD_URL': { def: "Site's AoD URL", topic: 'Identification' },
+
+  // ── CONTACTS (32 fields) ──
+  'CONTACTS.CONTACT_ID': { def: 'Contact ID (unique key)', topic: 'Identification' },
+  'CONTACTS.SITE_ID': { def: 'Site ID — links contact to their Site', topic: 'Identification', fk: 'SITES.SITE_ID' },
+  'CONTACTS.PREFIX': { def: "Contact's Prefix (ex: Mr., Ms, M., Mme, Hr., Fr., Sr., Sra., Sg.)", topic: 'Identification' },
+  'CONTACTS.FIRST_NAME': { def: "Contact's First Name", topic: 'Identification' },
+  'CONTACTS.MIDDLE_NAME': { def: "Contact's Middle Name", topic: 'Identification' },
+  'CONTACTS.LAST_NAME': { def: "Contact's Last Name", topic: 'Identification' },
+  'CONTACTS.JOB_TITLE': { def: "Contact's Job Title (ex: Database Marketing Analyst)", topic: 'Job' },
+  'CONTACTS.JOB_FUNCTION_CODES': { def: "Contact's Job Functions (3-char Codes, ex: DBM MKT BIS)", topic: 'Job' },
+  'CONTACTS.JOB_FUNCTION_1': { def: "Contact's Job Function 1 (ex: Database Administration / Data Mgmt)", topic: 'Job' },
+  'CONTACTS.JOB_FUNCTION_2': { def: "Contact's Job Function 2 (ex: Marketing)", topic: 'Job' },
+  'CONTACTS.JOB_FUNCTION_3': { def: "Contact's Job Function 3 (ex: Analytics/BI/Research)", topic: 'Job' },
+  'CONTACTS.DEPARTMENT_1': { def: "Contact's Department 1 (ex: Information Technology)", topic: 'Job' },
+  'CONTACTS.DEPARTMENT_2': { def: "Contact's Department 2 (ex: Marketing)", topic: 'Job' },
+  'CONTACTS.DEPARTMENT_3': { def: "Contact's Department 3", topic: 'Job' },
+  'CONTACTS.JOB_LEVEL': { def: "Contact's Job Level", topic: 'Job', values: ['C-level','VP/SVP','Director','Manager'] },
+  'CONTACTS.CONTACT_CONTINENT': { def: 'Continent of the Contact', topic: 'Location' },
+  'CONTACTS.CONTACT_COUNTRY_GROUPING_CODE': { def: 'Country Grouping of the Contact', topic: 'Location', values: ['APac','EMEA','LatAm','NA'] },
+  'CONTACTS.CONTACT_COUNTRY': { def: 'Country of the Contact', topic: 'Location' },
+  'CONTACTS.CONTACT_COUNTRY_CODE': { def: 'ISO 3166-1 alpha-2 Country Code of the Contact', topic: 'Location' },
+  'CONTACTS.CONTACT_PHONE_DIRECT_OFF': { def: "Contact's Direct Dial Phone Number (Office)", topic: 'Identification' },
+  'CONTACTS.CONTACT_PHONE_DIRECT_MOB': { def: "Contact's Direct Dial Phone Number (Mobile)", topic: 'Identification' },
+  'CONTACTS.EMAIL': { def: "Contact's Professional Email Address", topic: 'Identification' },
+  'CONTACTS.EMAIL_STATUS': { def: "Contact's Email Status", topic: 'Identification', values: ['Valid','Invalid','Unknown'] },
+  'CONTACTS.EMAIL_VALIDATION_DATE': { def: "Contact's Email Validation Date", topic: 'Date' },
+  'CONTACTS.CONTACT_CONFIDENCE_RANKING': { def: "Contact's Confidence Ranking", topic: 'Quality', values: ['1 (highest)','2','3','4','5 (lowest)'] },
+  'CONTACTS.CONTACT_TYPE': { def: 'Contact Type', topic: 'Classification', values: ['S = Site-level contact','A = Account-level contact'] },
+  'CONTACTS.CONTACT_LANGUAGE': { def: 'Contact Language', topic: 'Identification' },
+  'CONTACTS.JOB_TITLE_CHANGE_DATE': { def: 'Date when contact changed job title for the last time', topic: 'Date' },
+  'CONTACTS.EMAIL_CHANGE_DATE': { def: 'Date when email was first introduced in AoD', topic: 'Date' },
+  'CONTACTS.ACCOUNT_CHANGE_DATE': { def: 'Date when contact changed account/enterprise for the last time', topic: 'Date' },
+  'CONTACTS.CONTACT_AOD_URL': { def: "Contact's AoD URL", topic: 'Identification' },
+  'CONTACTS.CONTACT_LDIN_URL': { def: "Contact's LinkedIn URL", topic: 'Identification' },
+
+  // ── SITES_TECHNOLOGY (7 fields) ──
+  'SITES_TECHNOLOGY.TECH_ID': { def: 'Technographics ID (unique key)', topic: 'Identification' },
+  'SITES_TECHNOLOGY.SITE_ID': { def: 'Site ID — links tech install to a Site', topic: 'Identification', fk: 'SITES.SITE_ID' },
+  'SITES_TECHNOLOGY.PRODUCT_ID': { def: 'Technology ID — links to tech catalogue', topic: 'Identification', fk: 'TECHNOLOGY_LooKuP.PRODUCT_ID' },
+  'SITES_TECHNOLOGY.PRODUCT_VENDOR': { def: 'Technology Vendor (ex: Zoho Corporation)', topic: 'Technology' },
+  'SITES_TECHNOLOGY.PRODUCT': { def: 'Technology/Product/Service (ex: Zoho Analytics)', topic: 'Technology' },
+  'SITES_TECHNOLOGY.PRODUCT_FIRST_SEEN_DATE': { def: 'Date when Technology was first detected', topic: 'Date' },
+  'SITES_TECHNOLOGY.PRODUCT_CONFIDENCE_RANKING': { def: 'Likelihood that the Technology is present', topic: 'Quality', values: ['1 = 90%-100%','2 = 75%-89%','3 = 60%-74%'] },
+
+  // ── TECHNOLOGY_LooKuP (8 fields) ──
+  'TECHNOLOGY_LooKuP.PRODUCT_ID': { def: 'Technology ID (unique key)', topic: 'Identification' },
+  'TECHNOLOGY_LooKuP.PRODUCT_SERIES': { def: 'Technology Series (ex: Data Management, BI & Analytics)', topic: 'Classification' },
+  'TECHNOLOGY_LooKuP.PRODUCT_CATEGORY': { def: 'Technology Category (ex: Business Intelligence)', topic: 'Classification' },
+  'TECHNOLOGY_LooKuP.PRODUCT_VENDOR': { def: 'Technology Vendor (ex: Zoho)', topic: 'Classification' },
+  'TECHNOLOGY_LooKuP.PRODUCT_VENDOR_URL': { def: 'Technology Vendor URL (ex: zoho.com)', topic: 'Classification' },
+  'TECHNOLOGY_LooKuP.PRODUCT': { def: 'Technology/Product/Service (ex: Zoho Analytics)', topic: 'Classification' },
+  'TECHNOLOGY_LooKuP.PRODUCT_HOSTING': { def: 'Technology Hosting Type', topic: 'Classification', values: ['IaaS','PaaS','SaaS','On-premise','Hybrid'] },
+  'TECHNOLOGY_LooKuP.PRODUCT_URL': { def: 'Technology URL (ex: zoho.com/analytics)', topic: 'Classification' },
+
+  // ── NAICS_LooKuP (12 fields) ──
+  'NAICS_LooKuP.NAICS6_CODE': { def: 'National Industry-level NAICS Code (6-digit)', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS6_DESC': { def: 'National Industry-level NAICS Description', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS5_CODE': { def: 'Industry-level NAICS Code (5-digit)', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS5_DESC': { def: 'Industry-level NAICS Description', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS4_CODE': { def: 'Industry Group-level NAICS Code (4-digit)', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS4_DESC': { def: 'Industry Group-level NAICS Description', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS3_CODE': { def: 'Subsector-level NAICS Code (3-digit)', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS3_DESC': { def: 'Subsector-level NAICS Description', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS2_CODE': { def: 'Sector-level NAICS Code (2-digit)', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS2_DESC': { def: 'Sector-level NAICS Description', topic: 'Industry' },
+  'NAICS_LooKuP.NAICS_SUBINDUSTRY': { def: "AoD's NAICS Sub-Industry", topic: 'Industry' },
+  'NAICS_LooKuP.NAICS_INDUSTRY': { def: "AoD's NAICS Industry", topic: 'Industry' },
+
+  // ── SIC_LooKuP (10 fields) ──
+  'SIC_LooKuP.SIC4_CODE': { def: 'Industry-level SIC Code (4-digit)', topic: 'Industry' },
+  'SIC_LooKuP.SIC4_DESC': { def: 'Industry-level SIC Description', topic: 'Industry' },
+  'SIC_LooKuP.SIC3_CODE': { def: 'Industry Group-level SIC Code (3-digit)', topic: 'Industry' },
+  'SIC_LooKuP.SIC3_DESC': { def: 'Industry Group-level SIC Description', topic: 'Industry' },
+  'SIC_LooKuP.SIC2_CODE': { def: 'Major Group-level SIC Code (2-digit)', topic: 'Industry' },
+  'SIC_LooKuP.SIC2_DESC': { def: 'Major Group-level SIC Description', topic: 'Industry' },
+  'SIC_LooKuP.SIC1_CODE': { def: 'Division-level SIC Code (1-char)', topic: 'Industry' },
+  'SIC_LooKuP.SIC1_DESC': { def: 'Division-level SIC Description', topic: 'Industry' },
+  'SIC_LooKuP.SIC_SUBINDUSTRY': { def: "AoD's SIC Sub-Industry", topic: 'Industry' },
+  'SIC_LooKuP.SIC_INDUSTRY': { def: "AoD's SIC Industry", topic: 'Industry' },
+
+  // ── NACE_LooKuP (10 fields) ──
+  'NACE_LooKuP.NACE4_CODE': { def: 'Class-level NACE Code (4-digit)', topic: 'Industry' },
+  'NACE_LooKuP.NACE4_DESC': { def: 'Class-level NACE Description', topic: 'Industry' },
+  'NACE_LooKuP.NACE3_CODE': { def: 'Group-level NACE Code (3-digit)', topic: 'Industry' },
+  'NACE_LooKuP.NACE3_DESC': { def: 'Group-level NACE Description', topic: 'Industry' },
+  'NACE_LooKuP.NACE2_CODE': { def: 'Division-level NACE Code (2-digit)', topic: 'Industry' },
+  'NACE_LooKuP.NACE2_DESC': { def: 'Division-level NACE Description', topic: 'Industry' },
+  'NACE_LooKuP.NACE1_CODE': { def: 'Section-level NACE Code (1-char)', topic: 'Industry' },
+  'NACE_LooKuP.NACE1_DESC': { def: 'Section-level NACE Description', topic: 'Industry' },
+  'NACE_LooKuP.NACE_SUBINDUSTRY': { def: "AoD's NACE Sub-Industry", topic: 'Industry' },
+  'NACE_LooKuP.NACE_INDUSTRY': { def: "AoD's NACE Industry", topic: 'Industry' },
+
+  // ── IDs_LooKuP (4 fields) ──
+  'IDs_LooKuP.AOD_ID': { def: 'AoD ID', topic: 'Identification' },
+  'IDs_LooKuP.AOD_ID_NAME': { def: 'Name of the AoD ID', topic: 'Identification', values: ['ACCOUNT_ID','SITE_ID'] },
+  'IDs_LooKuP.AOD_ALT_ID': { def: 'Mapped/Alternative ID from legacy or external systems', topic: 'Identification' },
+  'IDs_LooKuP.AOD_ALT_ID_NAME': { def: 'Name/Source of the Mapped ID (ex: Legacy AoD AccountID)', topic: 'Identification' },
+
+  // ── DUNS_LooKuP (4 fields) ──
+  'DUNS_LooKuP.AOD_ID': { def: 'AoD ID (maps to ACCOUNT_ID or SITE_ID)', topic: 'Identification' },
+  'DUNS_LooKuP.AOD_ID_NAME': { def: 'Name of the AoD ID', topic: 'Identification', values: ['ACCOUNT_ID','SITE_ID'] },
+  'DUNS_LooKuP.DUNS_NUMBER': { def: 'D-U-N-S Number (Dun & Bradstreet identifier)', topic: 'Identification' },
+  'DUNS_LooKuP.DUNS_NUMBER_NAME': { def: 'Name of the D-U-N-S Number type', topic: 'Identification' },
+};
+
+
+const relationships = [
+  { from: 'ACCOUNTS', to: 'SITES', label: '1:N', color: '#2563eb' },
+  { from: 'ACCOUNTS', to: 'ACCOUNT_BUSINESS_LISTS', label: '1:N', color: '#2563eb' },
+  { from: 'SITES', to: 'CONTACTS', label: '1:N', color: '#2563eb' },
+  { from: 'SITES', to: 'SITES_TECHNOLOGY', label: '1:N', color: '#2563eb' },
+  { from: 'TECHNOLOGY_LooKuP', to: 'SITES_TECHNOLOGY', label: '1:N', color: '#16a34a' },
+  { from: 'NAICS_LooKuP', to: 'ACCOUNTS', label: 'FK', color: '#7c3aed' },
+  { from: 'NAICS_LooKuP', to: 'SITES', label: 'FK', color: '#7c3aed' },
+  { from: 'SIC_LooKuP', to: 'ACCOUNTS', label: 'FK', color: '#7c3aed' },
+  { from: 'SIC_LooKuP', to: 'SITES', label: 'FK', color: '#7c3aed' },
+  { from: 'NACE_LooKuP', to: 'ACCOUNTS', label: 'FK', color: '#7c3aed' },
+  { from: 'NACE_LooKuP', to: 'SITES', label: 'FK', color: '#7c3aed' },
+];
+
+
+const defaultPositions = {
+  ACCOUNTS:               { x: 500, y: 60 },
+  ACCOUNT_BUSINESS_LISTS: { x: 20,  y: 60 },
+  SITES:                  { x: 500, y: 620 },
+  CONTACTS:               { x: 20, y: 1200 },
+  SITES_TECHNOLOGY:       { x: 500, y: 1200 },
+  TECHNOLOGY_LooKuP:      { x: 1000, y: 1200 },
+  NAICS_LooKuP:           { x: 1050, y: 60 },
+  SIC_LooKuP:             { x: 1050, y: 380 },
+  NACE_LooKuP:            { x: 1050, y: 660 },
+  DUNS_LooKuP:            { x: 1550, y: 60 },
+  IDs_LooKuP:             { x: 1550, y: 300 },
+};
+
+const panLayer = document.getElementById('pan-layer');
+const container = document.getElementById('canvas-container');
+const svgEl = document.getElementById('connections');
+const nodes = {};
+let scale = 1, panX = 40, panY = 60;
+
+function buildNode(tableName, tableData) {
+  const pos = defaultPositions[tableName] || { x: Math.random()*800, y: Math.random()*600 };
+  const el = document.createElement('div');
+  el.className = `table-node type-${tableData.type}`;
+  el.id = `node-${tableName}`;
+  el.style.left = pos.x + 'px';
+  el.style.top = pos.y + 'px';
+
+  let fieldsHTML = tableData.fields.map(f => {
+    let keyHTML = '';
+    if (f.key === 'PK') keyHTML = '<span class="key-badge key-pk">PK</span>';
+    else if (f.key === 'CPK') keyHTML = '<span class="key-badge key-cpk">CPK</span>';
+    else if (f.key === 'FK') keyHTML = '<span class="key-badge key-fk">FK</span>';
+    return `<div class="field" data-table="${tableName}" data-field="${f.name}" onclick="showFieldInfo(event, '${tableName}', '${f.name}')">${keyHTML}<span class="fname">${f.name}</span><span class="ftype">${f.type}</span></div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="table-header">
+      <span class="badge">${tableData.type}</span>
+      <span class="table-name">${tableName}</span>
+    </div>
+    <div class="table-fields">${fieldsHTML}</div>
+    <button class="collapse-btn" onclick="toggleCollapse('${tableName}')">▲ collapse</button>
+  `;
+
+  panLayer.appendChild(el);
+  nodes[tableName] = { el, x: pos.x, y: pos.y };
+  makeDraggable(el, tableName);
+}
+
+function makeDraggable(el, name) {
+  let startX, startY, origX, origY, isDragging = false;
+
+  el.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.collapse-btn') || e.target.closest('.table-fields')) return;
+    e.stopPropagation();
+    isDragging = true;
+    el.classList.add('dragging');
+    startX = e.clientX; startY = e.clientY;
+    origX = nodes[name].x; origY = nodes[name].y;
+
+    const onMove = (e2) => {
+      const dx = (e2.clientX - startX) / scale;
+      const dy = (e2.clientY - startY) / scale;
+      nodes[name].x = origX + dx;
+      nodes[name].y = origY + dy;
+      el.style.left = nodes[name].x + 'px';
+      el.style.top = nodes[name].y + 'px';
+      drawConnections();
+    };
+    const onUp = () => {
+      isDragging = false;
+      el.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+/* Pan & Zoom */
+let isPanning = false, panStartX, panStartY, panOrigX, panOrigY;
+
+container.addEventListener('mousedown', (e) => {
+  if (e.target.closest('.table-node')) return;
+  isPanning = true;
+  container.classList.add('grabbing');
+  panStartX = e.clientX; panStartY = e.clientY;
+  panOrigX = panX; panOrigY = panY;
+});
+document.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  panX = panOrigX + (e.clientX - panStartX);
+  panY = panOrigY + (e.clientY - panStartY);
+  applyTransform();
+});
+document.addEventListener('mouseup', () => {
+  isPanning = false;
+  container.classList.remove('grabbing');
+});
+
+container.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = container.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const oldScale = scale;
+  scale *= e.deltaY < 0 ? 1.08 : 0.93;
+  scale = Math.max(0.2, Math.min(3, scale));
+  panX = mx - (mx - panX) * (scale / oldScale);
+  panY = my - (my - panY) * (scale / oldScale);
+  applyTransform();
+  document.getElementById('zoom-info').textContent = Math.round(scale * 100) + '%';
+}, { passive: false });
+
+function applyTransform() {
+  panLayer.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+}
+
+/* Connections */
+function drawConnections() {
+  let paths = '';
+  relationships.forEach(rel => {
+    const fromNode = nodes[rel.from];
+    const toNode = nodes[rel.to];
+    if (!fromNode || !toNode) return;
+    if (hiddenTables.has(rel.from) || hiddenTables.has(rel.to)) return;
+
+    const fEl = fromNode.el, tEl = toNode.el;
+    const fw = fEl.offsetWidth, fh = fEl.offsetHeight;
+    const tw = tEl.offsetWidth, th = tEl.offsetHeight;
+
+    const fcx = fromNode.x + fw/2, fcy = fromNode.y + fh/2;
+    const tcx = toNode.x + tw/2, tcy = toNode.y + th/2;
+
+    let x1, y1, x2, y2;
+    const dx = tcx - fcx, dy = tcy - fcy;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) { x1 = fromNode.x + fw; y1 = fcy; x2 = toNode.x; y2 = tcy; }
+      else { x1 = fromNode.x; y1 = fcy; x2 = toNode.x + tw; y2 = tcy; }
+    } else {
+      if (dy > 0) { x1 = fcx; y1 = fromNode.y + fh; x2 = tcx; y2 = toNode.y; }
+      else { x1 = fcx; y1 = fromNode.y; x2 = tcx; y2 = toNode.y + th; }
+    }
+
+    const mx = (x1 + x2)/2, my = (y1 + y2)/2;
+    const cp1x = Math.abs(dx) > Math.abs(dy) ? mx : x1;
+    const cp1y = Math.abs(dx) > Math.abs(dy) ? y1 : my;
+    const cp2x = Math.abs(dx) > Math.abs(dy) ? mx : x2;
+    const cp2y = Math.abs(dx) > Math.abs(dy) ? y2 : my;
+
+    paths += `<path d="M${x1},${y1} C${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}" stroke="${rel.color}" />`;
+  });
+  svgEl.innerHTML = paths;
+}
+
+function toggleCollapse(name) {
+  const el = nodes[name].el;
+  el.classList.toggle('collapsed');
+  const btn = el.querySelector('.collapse-btn');
+  btn.textContent = el.classList.contains('collapsed') ? '▼ expand' : '▲ collapse';
+  setTimeout(drawConnections, 10);
+}
+
+function collapseAll() {
+  Object.keys(nodes).forEach(n => {
+    nodes[n].el.classList.add('collapsed');
+    nodes[n].el.querySelector('.collapse-btn').textContent = '▼ expand';
+  });
+  setTimeout(drawConnections, 10);
+}
+
+function expandAll() {
+  Object.keys(nodes).forEach(n => {
+    nodes[n].el.classList.remove('collapsed');
+    nodes[n].el.querySelector('.collapse-btn').textContent = '▲ collapse';
+  });
+  setTimeout(drawConnections, 10);
+}
+
+function resetView() {
+  scale = 1; panX = 40; panY = 60;
+  applyTransform();
+  document.getElementById('zoom-info').textContent = '100%';
+  Object.keys(defaultPositions).forEach(name => {
+    if (!nodes[name]) return;
+    nodes[name].x = defaultPositions[name].x;
+    nodes[name].y = defaultPositions[name].y;
+    nodes[name].el.style.left = defaultPositions[name].x + 'px';
+    nodes[name].el.style.top = defaultPositions[name].y + 'px';
+  });
+  drawConnections();
+}
+
+function autoLayout() {
+  const dataOrder = ['ACCOUNT_BUSINESS_LISTS','ACCOUNTS','SITES','CONTACTS','SITES_TECHNOLOGY'];
+  const lookupOrder = ['NAICS_LooKuP','SIC_LooKuP','NACE_LooKuP','TECHNOLOGY_LooKuP','DUNS_LooKuP','IDs_LooKuP'];
+  let y = 40;
+  dataOrder.forEach(name => {
+    if (!nodes[name]) return;
+    nodes[name].x = 80; nodes[name].y = y;
+    nodes[name].el.style.left = '80px'; nodes[name].el.style.top = y + 'px';
+    y += nodes[name].el.offsetHeight + 30;
+  });
+  y = 40;
+  lookupOrder.forEach(name => {
+    if (!nodes[name]) return;
+    nodes[name].x = 700; nodes[name].y = y;
+    nodes[name].el.style.left = '700px'; nodes[name].el.style.top = y + 'px';
+    y += nodes[name].el.offsetHeight + 30;
+  });
+  drawConnections();
+}
+
+/* ── Field Info Popup ── */
+const popup = document.getElementById('field-popup');
+let activeField = null;
+
+function showFieldInfo(e, table, field) {
+  e.stopPropagation();
+  const key = table + '.' + field;
+  const info = fieldDefs[key];
+
+  // Toggle off if clicking same field
+  if (activeField) activeField.classList.remove('active');
+  const clickedEl = e.currentTarget;
+  if (activeField === clickedEl) { closePopup(); return; }
+  activeField = clickedEl;
+  clickedEl.classList.add('active');
+
+  document.getElementById('popup-fname').textContent = field;
+
+  let html = '';
+  if (info) {
+    html += `<div class="popup-row"><div class="popup-label">Definition</div><div class="popup-value">${info.def}</div></div>`;
+    html += `<div class="popup-row"><div class="popup-label">Topic</div><div class="popup-value">${info.topic}</div></div>`;
+    if (info.values) {
+      html += `<div class="popup-row"><div class="popup-label">Possible Values</div><div class="popup-values-list">${info.values.map(v => `<span class="popup-val-chip">${v}</span>`).join('')}</div></div>`;
+    }
+    if (info.fk) {
+      html += `<div class="popup-row"><div class="popup-label">Foreign Key Reference</div><div class="popup-fk-ref">→ ${info.fk}</div></div>`;
+    }
+    if (info.applies) {
+      html += `<div class="popup-row"><div class="popup-label">Applies To</div><div class="popup-value">${info.applies}</div></div>`;
+    }
+  } else {
+    html = `<div class="popup-row"><div class="popup-value" style="color:#484f58">No additional info available for this field.</div></div>`;
+  }
+  document.getElementById('popup-body').innerHTML = html;
+
+  popup.style.display = 'block';
+  // Position near cursor
+  const px = Math.min(e.clientX + 12, window.innerWidth - 420);
+  const py = Math.min(e.clientY - 20, window.innerHeight - popup.offsetHeight - 20);
+  popup.style.left = px + 'px';
+  popup.style.top = Math.max(50, py) + 'px';
+}
+
+function closePopup() {
+  popup.style.display = 'none';
+  if (activeField) { activeField.classList.remove('active'); activeField = null; }
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#field-popup') && !e.target.closest('.field')) closePopup();
+});
+
+/* ── Panel System ── */
+let currentPanel = null;
+
+function openPanel(which) {
+  closePopup();
+  if (currentPanel === which) { closePanel(); return; }
+  closePanel();
+  currentPanel = which;
+  document.getElementById('panel-overlay').classList.add('open');
+  document.getElementById(`panel-${which}`).classList.add('open');
+  if (which === 'tables') buildTablesPanel();
+  if (which === 'fields') buildFieldsPanel();
+}
+
+function closePanel() {
+  document.getElementById('panel-overlay').classList.remove('open');
+  document.querySelectorAll('.side-panel').forEach(p => p.classList.remove('open'));
+  currentPanel = null;
+}
+
+/* ── Table Visibility ── */
+const hiddenTables = new Set();
+
+function buildTablesPanel() {
+  const container = document.getElementById('tables-list');
+  let html = '<div class="panel-section-title">Data Tables</div>';
+  Object.entries(schema).forEach(([name, data]) => {
+    if (data.type !== 'data') return;
+    const checked = !hiddenTables.has(name) ? 'checked' : '';
+    html += `<div class="panel-item ${hiddenTables.has(name)?'disabled':''}">
+      <input type="checkbox" id="tbl-${name}" ${checked} onchange="toggleTable('${name}', this.checked)">
+      <label for="tbl-${name}">${name}</label>
+      <span class="item-badge item-badge-data">${data.fields.length}</span>
+    </div>`;
+  });
+  html += '<div class="panel-section-title">Lookup Tables</div>';
+  Object.entries(schema).forEach(([name, data]) => {
+    if (data.type !== 'lookup') return;
+    const checked = !hiddenTables.has(name) ? 'checked' : '';
+    html += `<div class="panel-item ${hiddenTables.has(name)?'disabled':''}">
+      <input type="checkbox" id="tbl-${name}" ${checked} onchange="toggleTable('${name}', this.checked)">
+      <label for="tbl-${name}">${name}</label>
+      <span class="item-badge item-badge-lookup">${data.fields.length}</span>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function toggleTable(name, show) {
+  if (show) hiddenTables.delete(name);
+  else hiddenTables.add(name);
+  applyTableVisibility();
+  buildTablesPanel();
+}
+
+function toggleAllTables(show) {
+  Object.keys(schema).forEach(n => show ? hiddenTables.delete(n) : hiddenTables.add(n));
+  applyTableVisibility();
+  buildTablesPanel();
+}
+
+function showOnlyData() {
+  Object.entries(schema).forEach(([n, d]) => d.type === 'data' ? hiddenTables.delete(n) : hiddenTables.add(n));
+  applyTableVisibility();
+  buildTablesPanel();
+}
+
+function showOnlyLookups() {
+  Object.entries(schema).forEach(([n, d]) => d.type === 'lookup' ? hiddenTables.delete(n) : hiddenTables.add(n));
+  applyTableVisibility();
+  buildTablesPanel();
+}
+
+function applyTableVisibility() {
+  Object.keys(nodes).forEach(name => {
+    nodes[name].el.style.display = hiddenTables.has(name) ? 'none' : '';
+  });
+  setTimeout(drawConnections, 20);
+}
+
+/* ── Field Filtering ── */
+const allTopics = new Set();
+const visibleTopics = new Set();
+let showKeysAlways = true;
+
+// Gather all topics
+function gatherTopics() {
+  Object.values(fieldDefs).forEach(d => {
+    if (d.topic) allTopics.add(d.topic);
+  });
+  allTopics.forEach(t => visibleTopics.add(t));
+  visibleTopics.add('_no_topic');
+}
+
+function buildFieldsPanel() {
+  const container = document.getElementById('fields-list');
+
+  // Count fields per topic
+  const topicCounts = {};
+  Object.entries(fieldDefs).forEach(([key, d]) => {
+    const t = d.topic || '_no_topic';
+    topicCounts[t] = (topicCounts[t] || 0) + 1;
+  });
+
+  let html = '<div class="panel-section-title">Always Show Keys</div>';
+  html += `<div class="panel-item">
+    <input type="checkbox" id="keys-always" ${showKeysAlways?'checked':''} onchange="showKeysAlways=this.checked; applyFieldFilter()">
+    <label for="keys-always">Always show PK / FK / CPK fields</label>
+  </div>`;
+
+  html += '<div class="panel-section-title">Topics</div>';
+  const sorted = [...allTopics].sort();
+  sorted.forEach(topic => {
+    const checked = visibleTopics.has(topic) ? 'checked' : '';
+    const count = topicCounts[topic] || 0;
+    html += `<div class="panel-item">
+      <input type="checkbox" id="topic-${topic.replace(/[^a-zA-Z]/g,'_')}" ${checked} onchange="toggleTopic('${topic}', this.checked)">
+      <label for="topic-${topic.replace(/[^a-zA-Z]/g,'_')}">${topic}</label>
+      <span class="item-badge item-badge-count">${count}</span>
+    </div>`;
+  });
+
+  // No-topic fields
+  if (topicCounts['_no_topic']) {
+    const checked = visibleTopics.has('_no_topic') ? 'checked' : '';
+    html += `<div class="panel-item">
+      <input type="checkbox" id="topic-none" ${checked} onchange="toggleTopic('_no_topic', this.checked)">
+      <label for="topic-none">(No topic)</label>
+      <span class="item-badge item-badge-count">${topicCounts['_no_topic']}</span>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleTopic(topic, show) {
+  show ? visibleTopics.add(topic) : visibleTopics.delete(topic);
+  applyFieldFilter();
+  buildFieldsPanel();
+}
+
+function toggleAllTopics(show) {
+  if (show) allTopics.forEach(t => visibleTopics.add(t));
+  else visibleTopics.clear();
+  if (show) visibleTopics.add('_no_topic');
+  applyFieldFilter();
+  buildFieldsPanel();
+}
+
+function showKeysOnly() {
+  visibleTopics.clear();
+  showKeysAlways = true;
+  applyFieldFilter();
+  buildFieldsPanel();
+}
+
+function showRelevantFields() {
+  visibleTopics.clear();
+  ['Identification','Sizing','Industry','Technology Totals'].forEach(t => visibleTopics.add(t));
+  showKeysAlways = true;
+  applyFieldFilter();
+  buildFieldsPanel();
+}
+
+function applyFieldFilter() {
+  const showAll = visibleTopics.size === allTopics.size + (visibleTopics.has('_no_topic') ? 1 : 0);
+
+  Object.entries(nodes).forEach(([tableName, node]) => {
+    const fields = node.el.querySelectorAll('.field');
+    fields.forEach(fieldEl => {
+      const fname = fieldEl.dataset.field;
+      const key = `${tableName}.${fname}`;
+      const info = fieldDefs[key];
+      const topic = info?.topic || '_no_topic';
+
+      // Check if field has a key
+      const hasKey = fieldEl.querySelector('.key-badge');
+
+      if (showAll) {
+        fieldEl.style.display = '';
+      } else if (showKeysAlways && hasKey) {
+        fieldEl.style.display = '';
+      } else if (visibleTopics.has(topic)) {
+        fieldEl.style.display = '';
+      } else {
+        fieldEl.style.display = 'none';
+      }
+    });
+  });
+  setTimeout(drawConnections, 20);
+}
+
+/* ── Search ── */
+let searchMatches = [];
+let searchIdx = -1;
+
+function onSearch(query) {
+  const q = query.trim().toLowerCase();
+  const clearBtn = document.getElementById('search-clear');
+  const bar = document.getElementById('search-bar');
+
+  // Clear old highlights
+  document.querySelectorAll('.search-match, .search-current').forEach(el => {
+    el.classList.remove('search-match', 'search-current');
+  });
+  document.querySelectorAll('.search-has-match').forEach(el => {
+    el.classList.remove('search-has-match');
+  });
+  // Expand collapsed tables that had matches
+  searchMatches = [];
+  searchIdx = -1;
+
+  if (!q) {
+    clearBtn.classList.remove('visible');
+    bar.classList.remove('visible');
+    return;
+  }
+
+  clearBtn.classList.add('visible');
+
+  // Search across all fields: name, definition, topic, values
+  Object.entries(nodes).forEach(([tableName, node]) => {
+    if (hiddenTables.has(tableName)) return;
+    const fields = node.el.querySelectorAll('.field');
+    let tableHasMatch = false;
+
+    fields.forEach(fieldEl => {
+      if (fieldEl.style.display === 'none') return;
+      const fname = fieldEl.dataset.field;
+      const key = `${tableName}.${fname}`;
+      const info = fieldDefs[key];
+
+      // Search in: field name, table name, definition, topic, values
+      const haystack = [
+        fname,
+        tableName,
+        info?.def || '',
+        info?.topic || '',
+        info?.fk || '',
+        info?.applies || '',
+        ...(info?.values || [])
+      ].join(' ').toLowerCase();
+
+      if (haystack.includes(q)) {
+        fieldEl.classList.add('search-match');
+        searchMatches.push({ tableName, fieldEl });
+        tableHasMatch = true;
+      }
+    });
+
+    if (tableHasMatch) {
+      node.el.classList.add('search-has-match');
+      // Auto-expand if collapsed
+      if (node.el.classList.contains('collapsed')) {
+        node.el.classList.remove('collapsed');
+        node.el.querySelector('.collapse-btn').textContent = '▲ collapse';
+      }
+    }
+  });
+
+  bar.classList.add('visible');
+  document.getElementById('search-count').textContent = searchMatches.length + ' result' + (searchMatches.length !== 1 ? 's' : '');
+
+  if (searchMatches.length > 0) {
+    searchIdx = 0;
+    highlightCurrent();
+  }
+}
+
+function highlightCurrent() {
+  document.querySelectorAll('.search-current').forEach(el => el.classList.remove('search-current'));
+  if (searchIdx < 0 || searchIdx >= searchMatches.length) return;
+  const match = searchMatches[searchIdx];
+  match.fieldEl.classList.add('search-current');
+  document.getElementById('search-count').textContent =
+    `${searchIdx + 1} / ${searchMatches.length}`;
+  scrollToNode(match.tableName, match.fieldEl);
+}
+
+function scrollToNode(tableName, fieldEl) {
+  const node = nodes[tableName];
+  const rect = node.el.getBoundingClientRect();
+  const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+
+  // Calculate target position to center the node
+  const targetX = -(node.x * scale) + containerRect.width / 2 - (node.el.offsetWidth * scale) / 2;
+  const targetY = -(node.y * scale) + containerRect.height / 2 - (node.el.offsetHeight * scale) / 2;
+
+  panX = targetX;
+  panY = targetY;
+  applyTransform();
+
+  // Scroll field into view within the table
+  fieldEl.scrollIntoView({ block: 'nearest' });
+}
+
+function navSearch(dir) {
+  if (searchMatches.length === 0) return;
+  searchIdx = (searchIdx + dir + searchMatches.length) % searchMatches.length;
+  highlightCurrent();
+}
+
+function onSearchKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    navSearch(e.shiftKey ? -1 : 1);
+  }
+  if (e.key === 'Escape') clearSearch();
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  onSearch('');
+  document.getElementById('search-input').blur();
+}
+
+// Global shortcut: Ctrl+F or Cmd+F
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+  }
+});
+
+// Init
+gatherTopics();
+Object.entries(schema).forEach(([name, data]) => buildNode(name, data));
+applyTransform();
+setTimeout(drawConnections, 50);
+window.addEventListener('resize', drawConnections);
+</script>
+</body>
+</html>

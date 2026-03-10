@@ -642,6 +642,12 @@ def swdb_structure():
 	return render_template("swdb_structure.html", content=markdown_html)
 
 
+@app.route("/swdb-schema")
+def swdb_schema():
+	"""Render the SWDB schema page."""
+	return render_template("swdb_schema.html")
+
+
 @app.route("/technology-history")
 def technology_history():
 	"""Technology History page."""

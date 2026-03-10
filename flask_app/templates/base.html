@@ -71,6 +71,9 @@
 						<li class="nav-item">
 							<a class="nav-link {% if request.endpoint == 'swdb_structure' %}active{% endif %}" href="{{ url_for('swdb_structure') }}">SWDB Structure</a>
 						</li>
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'swdb_schema' %}active{% endif %}" href="{{ url_for('swdb_schema') }}">SWDB Schema</a>
+						</li>
 					</ul>
 				</div>
 			</div>

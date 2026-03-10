@@ -38,3 +38,4 @@ http://127.0.0.1:5000/
    - The table supports horizontal scrolling to accommodate many columns.
 
 > Note: Only `SELECT` queries are allowed for safety; other statement types will be rejected.
+

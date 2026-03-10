@@ -10,6 +10,36 @@
 			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
 		}
 
+		.query-list-wrapper {
+			max-height: 220px;
+			overflow-y: auto;
+			border: 1px solid #dee2e6;
+			border-radius: 0.375rem;
+			background: #fff;
+		}
+
+		.query-list-item {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+			gap: 0.75rem;
+			padding: 0.75rem 1rem;
+			border-bottom: 1px solid #f1f3f5;
+		}
+
+		.query-list-item:last-child {
+			border-bottom: none;
+		}
+
+		.query-meta {
+			font-size: 0.8rem;
+			color: #6c757d;
+		}
+
+		.query-actions button {
+			white-space: nowrap;
+		}
+
 		/* CodeMirror 6 Customization */
 		.cm-editor {
 			height: 200px;
@@ -137,6 +167,31 @@
 			</div>
 		</section>
 
+		<section class="query-card card">
+			<div class="card-body">
+				<div class="row g-3 align-items-end">
+					<div class="col-md-8">
+						<label for="save-query-name" class="form-label fw-semibold mb-1">Save current query</label>
+						<input type="text" id="save-query-name" class="form-control" placeholder="Optional name for this query">
+					</div>
+					<div class="col-md-4 text-md-end">
+						<button type="button" id="save-query-btn" class="btn btn-success w-100">Save query</button>
+					</div>
+				</div>
+
+				<div class="row g-3 mt-3">
+					<div class="col-md-6">
+						<h6 class="mb-2">Recent runs</h6>
+						<div id="query-history-list" class="query-list-wrapper"></div>
+					</div>
+					<div class="col-md-6">
+						<h6 class="mb-2">Saved queries</h6>
+						<div id="saved-queries-list" class="query-list-wrapper"></div>
+					</div>
+				</div>
+			</div>
+		</section>
+
 		<section class="table-container">
 			<div class="d-flex justify-content-between align-items-center mb-2">
 				<h2 class="h6 mb-0">Result preview</h2>
@@ -213,6 +268,183 @@
 
 		<script>
 			let table = null;
+			const HISTORY_KEY = "swdb_query_history_v1";
+			const SAVED_KEY = "swdb_saved_queries_v1";
+			const HISTORY_LIMIT = 100;
+			const SAVED_LIMIT = 100;
+
+			function loadStoredList(key) {
+				try {
+					return JSON.parse(localStorage.getItem(key) || "[]");
+				} catch (err) {
+					console.warn("Failed to read stored list", err);
+					return [];
+				}
+			}
+
+			function persistList(key, value) {
+				try {
+					localStorage.setItem(key, JSON.stringify(value));
+				} catch (err) {
+					console.warn("Failed to persist list", err);
+				}
+			}
+
+			let queryHistory = loadStoredList(HISTORY_KEY);
+			let savedQueries = loadStoredList(SAVED_KEY);
+
+			function setEditorContent(sql) {
+				if (window.cmEditor) {
+					const transaction = window.cmEditor.state.update({
+						changes: { from: 0, to: window.cmEditor.state.doc.length, insert: sql },
+					});
+					window.cmEditor.dispatch(transaction);
+				} else {
+					document.getElementById("initial-query").value = sql;
+				}
+			}
+
+			function getCurrentSql() {
+				if (window.cmEditor) {
+					return window.cmEditor.state.doc.toString();
+				}
+				return document.getElementById("initial-query").value || "";
+			}
+
+			function formatSqlPreview(sql) {
+				const oneLine = sql.replace(/\s+/g, " ").trim();
+				return oneLine.length > 140 ? `${oneLine.slice(0, 140)}…` : oneLine;
+			}
+
+			function renderHistoryList() {
+				const container = document.getElementById("query-history-list");
+				container.innerHTML = "";
+				if (!queryHistory.length) {
+					container.innerHTML = '<div class="p-3 text-muted small">No queries run yet.</div>';
+					return;
+				}
+
+				queryHistory
+					.slice(0, HISTORY_LIMIT)
+					.forEach((entry) => {
+						const item = document.createElement("div");
+						item.className = "query-list-item";
+						const meta = document.createElement("div");
+						meta.innerHTML = `<div class="query-meta">${new Date(entry.runAt).toLocaleString()}</div><div>${formatSqlPreview(entry.sql)}</div>`;
+
+						const actions = document.createElement("div");
+						actions.className = "query-actions d-flex gap-2";
+
+						const loadBtn = document.createElement("button");
+						loadBtn.className = "btn btn-sm btn-outline-primary";
+						loadBtn.textContent = "Load";
+						loadBtn.addEventListener("click", () => setEditorContent(entry.sql));
+
+						const runBtn = document.createElement("button");
+						runBtn.className = "btn btn-sm btn-primary";
+						runBtn.textContent = "Load & run";
+						runBtn.addEventListener("click", () => {
+							setEditorContent(entry.sql);
+							document.getElementById("query-form").dispatchEvent(new Event("submit"));
+						});
+
+						actions.appendChild(loadBtn);
+						actions.appendChild(runBtn);
+						item.appendChild(meta);
+						item.appendChild(actions);
+						container.appendChild(item);
+					});
+			}
+
+			function renderSavedQueries() {
+				const container = document.getElementById("saved-queries-list");
+				container.innerHTML = "";
+				if (!savedQueries.length) {
+					container.innerHTML = '<div class="p-3 text-muted small">No saved queries yet.</div>';
+					return;
+				}
+
+				savedQueries.slice(0, SAVED_LIMIT).forEach((entry) => {
+					const item = document.createElement("div");
+					item.className = "query-list-item";
+
+					const meta = document.createElement("div");
+					const name = entry.name && entry.name.trim() ? entry.name.trim() : "Untitled query";
+					meta.innerHTML = `<div class="fw-semibold">${name}</div><div class="query-meta">Saved ${new Date(entry.savedAt).toLocaleString()}</div><div>${formatSqlPreview(entry.sql)}</div>`;
+
+					const actions = document.createElement("div");
+						actions.className = "query-actions d-flex flex-column gap-2 align-items-end";
+
+						const loadBtn = document.createElement("button");
+						loadBtn.className = "btn btn-sm btn-outline-primary";
+						loadBtn.textContent = "Load";
+						loadBtn.addEventListener("click", () => setEditorContent(entry.sql));
+
+						const runBtn = document.createElement("button");
+						runBtn.className = "btn btn-sm btn-primary";
+						runBtn.textContent = "Load & run";
+						runBtn.addEventListener("click", () => {
+							setEditorContent(entry.sql);
+							document.getElementById("query-form").dispatchEvent(new Event("submit"));
+						});
+
+						const renameBtn = document.createElement("button");
+						renameBtn.className = "btn btn-sm btn-outline-secondary";
+						renameBtn.textContent = "Rename";
+						renameBtn.addEventListener("click", () => {
+							const nextName = prompt("Enter a name for this query", name) || "";
+							savedQueries = savedQueries.map((q) => q.id === entry.id ? { ...q, name: nextName.trim() } : q);
+							persistList(SAVED_KEY, savedQueries);
+							renderSavedQueries();
+						});
+
+						actions.appendChild(loadBtn);
+						actions.appendChild(runBtn);
+						actions.appendChild(renameBtn);
+						item.appendChild(meta);
+						item.appendChild(actions);
+						container.appendChild(item);
+				});
+			}
+
+			function recordQueryRun(sql) {
+				if (!sql || !sql.trim()) return;
+				const entry = {
+					id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+					sql,
+					runAt: new Date().toISOString(),
+				};
+				queryHistory = [entry, ...queryHistory].slice(0, HISTORY_LIMIT);
+				persistList(HISTORY_KEY, queryHistory);
+				renderHistoryList();
+			}
+
+			function saveCurrentQuery() {
+				const sql = getCurrentSql();
+				if (!sql.trim()) {
+					return;
+				}
+				const nameInput = document.getElementById("save-query-name");
+				const providedName = (nameInput.value || "").trim();
+				const entry = {
+					id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+					name: providedName || `Saved ${new Date().toLocaleString()}`,
+					sql,
+					savedAt: new Date().toISOString(),
+				};
+
+				// If name matches existing saved query, replace that entry
+				const existingIndex = savedQueries.findIndex((q) => q.name === entry.name);
+				if (existingIndex >= 0) {
+					savedQueries[existingIndex] = { ...entry, id: savedQueries[existingIndex].id };
+				} else {
+					savedQueries = [entry, ...savedQueries];
+				}
+
+				savedQueries = savedQueries.slice(0, SAVED_LIMIT);
+				persistList(SAVED_KEY, savedQueries);
+				renderSavedQueries();
+			}
 
 			function updateColumnSelectionUI(allColumns) {
 				const container = document.getElementById("columns-checkbox-container");
@@ -381,6 +613,8 @@
 					sql = document.getElementById("initial-query").value;
 				}
 
+				recordQueryRun(sql);
+
 				const statusEl = document.getElementById("status-text");
 				const rowCountEl = document.getElementById("row-count");
 				statusEl.textContent = "Running query...";
@@ -408,6 +642,10 @@
 					statusEl.classList.add("text-danger");
 				}
 			}
+
+			document.getElementById("save-query-btn").addEventListener("click", saveCurrentQuery);
+			renderHistoryList();
+			renderSavedQueries();
 
 			document
 				.getElementById("query-form")
