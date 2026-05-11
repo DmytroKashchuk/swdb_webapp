@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import markdown
 from pathlib import Path
+import csv
 import psycopg2
 import psycopg2.extras
 
@@ -803,6 +804,295 @@ def technology_history_api():
 			conn.close()
 
 	return jsonify({"results": results, "site_name": site_name})
+
+
+@app.route("/account-technologies")
+def account_technologies():
+	"""Account Technologies page.
+
+	Lets the user enter a site_url. The page finds all sites matching that
+	URL, picks the site with the largest number of employees, fetches its
+	account_id, then lists every site belonging to that account along with
+	the products installed at each site. It also computes the intersection
+	of products across all sites and a pairwise Jaccard similarity matrix.
+
+	Supported years: 2021, 2022 (these years use the new schema with
+	site_url, account_id and product lookup tables).
+	"""
+	return render_template("account_technologies.html")
+
+
+@app.route("/api/account-technologies/sites")
+def account_technologies_sites_api():
+	"""Step 1 endpoint: list all sites whose site_url matches.
+
+	Returns every column from `usa_{year}_sites`, plus a suggested
+	`top_site_id` (the matched site with the highest employee count) so
+	the UI can highlight it as the default selection.
+	"""
+	site_url = request.args.get("site_url", "").strip()
+	year_raw = request.args.get("year", "2022").strip()
+
+	if not site_url:
+		return jsonify({"error": "site_url is required."}), 400
+	try:
+		year = int(year_raw)
+	except (TypeError, ValueError):
+		return jsonify({"error": "Year must be a valid number."}), 400
+	if year not in (2021, 2022):
+		return jsonify({"error": "Only years 2021 and 2022 are supported."}), 400
+
+	sites_table = f"usa_{year}_sites"
+	accounts_table = f"usa_{year}_accounts"
+	emp_num_sql = "COALESCE(NULLIF(site_employees, '')::bigint, 0)"
+	acc_emp_num_sql = "COALESCE(NULLIF(account_employees, '')::bigint, 0)"
+
+	conn = None
+	try:
+		conn = get_db_connection()
+		with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+			# Exact case-insensitive match by default. Special-case: ada.org
+			# also accepts variants like "ada.org/en".
+			if site_url.lower().rstrip("/") == "ada.org":
+				site_where = "LOWER(site_url) = %s OR LOWER(site_url) LIKE %s"
+				site_params = ["ada.org", "ada.org/%"]
+				acc_where = "LOWER(account_url) = %s OR LOWER(account_url) LIKE %s"
+				acc_params = ["ada.org", "ada.org/%"]
+			else:
+				site_where = "LOWER(site_url) = LOWER(%s)"
+				site_params = [site_url]
+				acc_where = "LOWER(account_url) = LOWER(%s)"
+				acc_params = [site_url]
+			cur.execute(
+				f"SELECT * FROM {sites_table} "
+				f"WHERE {site_where} "
+				f"ORDER BY {emp_num_sql} DESC LIMIT 500;",
+				site_params,
+			)
+			rows = cur.fetchall()
+			columns = [d.name for d in cur.description] if cur.description else []
+
+			cur.execute(
+				f"SELECT * FROM {accounts_table} "
+				f"WHERE {acc_where} "
+				f"ORDER BY {acc_emp_num_sql} DESC LIMIT 500;",
+				acc_params,
+			)
+			account_rows = cur.fetchall()
+			account_columns = [d.name for d in cur.description] if cur.description else []
+	except Exception as exc:  # pragma: no cover
+		return jsonify({"error": str(exc)}), 500
+	finally:
+		if conn:
+			try:
+				conn.close()
+			except Exception:
+				pass
+
+	if not rows and not account_rows:
+		return jsonify({"error": f"No sites or accounts match '{site_url}' in {year}."}), 404
+
+	def _emp(r):
+		v = r.get("site_employees")
+		try:
+			return int(v) if v not in (None, "") else 0
+		except (TypeError, ValueError):
+			return 0
+
+	top = max(rows, key=_emp) if rows else None
+	return jsonify({
+		"year": year,
+		"site_url": site_url,
+		"columns": columns,
+		"rows": rows,
+		"top_site_id": (top or {}).get("site_id"),
+		"account_columns": account_columns,
+		"accounts": account_rows,
+	})
+
+
+@app.route("/api/account-technologies/account")
+def account_technologies_account_api():
+	"""Step 2 endpoint: given a site_id, return the account row, all sibling
+	sites, products per site, common products, and pairwise Jaccard similarity.
+	"""
+	site_id = request.args.get("site_id", "").strip()
+	year_raw = request.args.get("year", "2022").strip()
+
+	if not site_id:
+		return jsonify({"error": "site_id is required."}), 400
+	try:
+		year = int(year_raw)
+	except (TypeError, ValueError):
+		return jsonify({"error": "Year must be a valid number."}), 400
+	if year not in (2021, 2022):
+		return jsonify({"error": "Only years 2021 and 2022 are supported."}), 400
+
+	sites_table = f"usa_{year}_sites"
+	accounts_table = f"usa_{year}_accounts"
+	tech_table = f"usa_{year}_sites_technology"
+	lookup_table = f"usa_{year}_technology_lookup"
+	emp_num_sql = "COALESCE(NULLIF(site_employees, '')::bigint, 0)"
+
+	conn = None
+	try:
+		conn = get_db_connection()
+		with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+			# Resolve account_id from the chosen site
+			cur.execute(
+				f"SELECT account_id FROM {sites_table} WHERE site_id = %s LIMIT 1;",
+				[site_id],
+			)
+			row = cur.fetchone()
+			if not row or not row.get("account_id"):
+				return jsonify({"error": f"site_id {site_id} not found or has no account_id."}), 404
+			account_id = row["account_id"]
+
+			# Account row (all columns)
+			cur.execute(
+				f"SELECT * FROM {accounts_table} WHERE account_id = %s LIMIT 1;",
+				[account_id],
+			)
+			account = cur.fetchone()
+			account_columns = [d.name for d in cur.description] if cur.description else []
+
+			# All sibling sites under this account, ordered by employees desc
+			cur.execute(
+				f"SELECT * FROM {sites_table} WHERE account_id = %s "
+				f"ORDER BY {emp_num_sql} DESC;",
+				[account_id],
+			)
+			sites = cur.fetchall()
+			site_columns = [d.name for d in cur.description] if cur.description else []
+
+			site_ids = [str(s["site_id"]) for s in sites]
+			if not site_ids:
+				return jsonify({"error": f"No sites for account_id {account_id}."}), 404
+
+			# Products joined with lookup
+			cur.execute(
+				f"SELECT st.site_id, st.product_id, "
+				f"       COALESCE(tl.product, st.product) AS product, "
+				f"       COALESCE(tl.product_vendor, st.product_vendor) AS product_vendor, "
+				f"       tl.product_category, tl.product_series "
+				f"FROM {tech_table} st "
+				f"LEFT JOIN {lookup_table} tl ON st.product_id = tl.product_id "
+				f"WHERE st.site_id = ANY(%s::text[]);",
+				[site_ids],
+			)
+			product_rows = cur.fetchall()
+	except Exception as exc:  # pragma: no cover
+		return jsonify({"error": str(exc)}), 500
+	finally:
+		if conn:
+			try:
+				conn.close()
+			except Exception:
+				pass
+
+	# Group products by site
+	products_by_site = {sid: [] for sid in site_ids}
+	# Flat list (one row per site/product) for the products Tabulator
+	products_flat = []
+	site_name_by_id = {str(s["site_id"]): s.get("site_name") for s in sites}
+	for r in product_rows:
+		sid = str(r["site_id"])
+		if sid not in products_by_site:
+			continue
+		entry = {
+			"site_id": sid,
+			"site_name": site_name_by_id.get(sid),
+			"product_id": r.get("product_id"),
+			"product": r.get("product"),
+			"product_vendor": r.get("product_vendor"),
+			"product_category": r.get("product_category"),
+			"product_series": r.get("product_series"),
+		}
+		products_by_site[sid].append(entry)
+		products_flat.append(entry)
+
+	# Add product_count to each site row for display
+	for s in sites:
+		sid = str(s["site_id"])
+		s["product_count"] = len(products_by_site.get(sid, []))
+	if "product_count" not in site_columns:
+		site_columns = list(site_columns) + ["product_count"]
+
+	# Top site within this account by employee count
+	top_site_id = None
+	if sites:
+		def _e(s):
+			v = s.get("site_employees")
+			try:
+				return int(v) if v not in (None, "") else 0
+			except (TypeError, ValueError):
+				return 0
+		top_site = max(sites, key=_e)
+		top_site_id = str(top_site.get("site_id"))
+
+	return jsonify({
+		"year": year,
+		"selected_site_id": site_id,
+		"account_id": account_id,
+		"account": account,
+		"account_columns": account_columns,
+		"sites": sites,
+		"site_columns": site_columns,
+		"products": products_flat,
+		"top_site_id": top_site_id,
+	})
+
+
+@app.route("/cpe-mapping")
+def cpe_mapping():
+	"""CPE Mapping browser page."""
+	return render_template("cpe_mapping.html")
+
+
+@app.route("/api/cpe-mapping")
+def cpe_mapping_api():
+	"""JSON API: return tech_with_cpe_mapping.csv data."""
+	csv_path = Path(__file__).parent / "data" / "tech_cve" / "tech_with_cpe_mapping.csv"
+	rows = []
+	try:
+		with open(csv_path, newline="", encoding="utf-8") as f:
+			reader = csv.DictReader(f)
+			for row in reader:
+				rows.append(row)
+	except FileNotFoundError:
+		return jsonify({"error": "CSV file not found."}), 404
+	except Exception as exc:
+		return jsonify({"error": str(exc)}), 500
+	return jsonify(rows)
+
+
+@app.route("/cve-summary")
+def cve_summary():
+	"""CVE Summary browser page."""
+	return render_template("cve_summary.html")
+
+
+@app.route("/api/cve-summary")
+def cve_summary_api():
+	"""JSON API: return tech_cve_summary.csv data."""
+	csv_path = Path(__file__).parent / "data" / "tech_cve" / "tech_cve_summary.csv"
+	rows = []
+	try:
+		with open(csv_path, newline="", encoding="utf-8") as f:
+			reader = csv.DictReader(f)
+			for row in reader:
+				# Convert numeric fields
+				for k in ("total_cves", "critical", "high", "medium", "low"):
+					try:
+						row[k] = int(row[k])
+					except (KeyError, ValueError, TypeError):
+						pass
+				rows.append(row)
+	except FileNotFoundError:
+		return jsonify({"error": "CSV file not found."}), 404
+	except Exception as exc:
+		return jsonify({"error": str(exc)}), 500
+	return jsonify(rows)
 
 
 if __name__ == "__main__":

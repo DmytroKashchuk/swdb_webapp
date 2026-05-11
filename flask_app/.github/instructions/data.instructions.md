@@ -396,3 +396,27 @@ tech_id,site_id,product_id,product_vendor,product,product_first_seen_date,produc
 product_id,product_series,product_category,product_vendor,product_vendor_url,product,product_hosting,product_url
 1881,Data Management Business Intelligence & Analytics,Database Management,PostgreSQL,,PostgreSQL,,
 ```
+
+# Data folder
+## /Users/dmk6603/Documents/swdb_webapp/flask_app/data/tech_cve/swdb_universe_installs.csv
+VendorName,Product,ProductId,TabKeyNewId,ProductSeries,ProductCategory,Total Sites,US Sites,Total Enterprises,Enterprises in US
+AppNexus,AppNexus,4611,4907,Advertising,Ad Exchanges,"696,761","471,708","257,895","130,146"
+AppNexus,AppNexus,4611,4907,Advertising,Ad Exchanges,"696,761","471,708","257,895","130,146"
+
+## /Users/dmk6603/Documents/swdb_webapp/flask_app/data/tech_cve/tech_cve_results.csv
+VendorName,Product,ProductCategory,cve_id,base_score,severity,published_date,description,match_method
+Index Exchange,Index Exchange,Ad Exchanges,CVE-2002-0852,5.0,MEDIUM,2002-09-05,"Buffer overflows in Cisco Virtual Private Network (VPN) Client 3.5.4 and earlier allows remote attackers to cause a denial of service via (1) an Internet Key Exchange (IKE) with a large Security Parameter Index (SPI) payload, or (2) an IKE packet with a large number of valid payloads.",keyword_vendor_product
+Index Exchange,Index Exchange,Ad Exchanges,CVE-2002-2223,5.1,MEDIUM,2002-12-31,"Buffer overflow in NetScreen-Remote 8.0 allows remote attackers to cause a denial of service and possibly execute arbitrary code via crafted Internet Key Exchange (IKE) response packets, possibly including (1) a large Security Parameter Index (SPI) field, (2) large number of payloads, or (3) a long payload.",keyword_vendor_product
+Index Exchange,Index Exchange,Ad Exchanges,CVE-2002-2224,5.1,MEDIUM,2002-12-31,"Buffer overflow in PGPFreeware 7.03 running on Windows NT 4.0 SP6 allows remote attackers to cause a denial of service and possibly execute arbitrary code via crafted Internet Key Exchange (IKE) response packets, possibly including (1) a large Security Parameter Index (SPI) field, (2) large number of payloads, or (3) a long payload.",keyword_vendor_product
+
+## /Users/dmk6603/Documents/swdb_webapp/flask_app/data/tech_cve/tech_cve_summary.csv
+VendorName,Product,ProductCategory,ProductSeries,cpe_vendor,cpe_product,total_cves,critical,high,medium,low,match_method
+AppNexus,AppNexus,Ad Exchanges,Advertising,appnexus,appnexus,0,0,0,0,0,keyword_vendor_product
+Rubicon Project,Rubicon Project,Ad Exchanges,Advertising,rubicon_project,rubicon_project,0,0,0,0,0,keyword_vendor_product
+Index Exchange,Index Exchange,Ad Exchanges,Advertising,index_exchange,index_exchange,9,0,2,7,0,keyword_vendor_product
+
+
+## /Users/dmk6603/Documents/swdb_webapp/flask_app/data/tech_cve/tech_with_cpe_mapping.csv
+VendorName,Product,ProductCategory,ProductSeries,cpe_vendor,cpe_product,cpe_match_string,nvd_api_url
+AppNexus,AppNexus,Ad Exchanges,Advertising,appnexus,appnexus,cpe:2.3:a:appnexus:appnexus:*:*:*:*:*:*:*,https://services.nvd.nist.gov/rest/json/cves/2.0?cpeName=cpe:2.3:a:appnexus:appnexus:*:*:*:*:*:*:*
+Rubicon Project,Rubicon Project,Ad Exchanges,Advertising,rubicon_project,rubicon_project,cpe:2.3:a:rubicon_project:rubicon_project:*:*:*:*:*:*:*,https://services.nvd.nist.gov/rest/json/cves/2.0?cpeName=cpe:2.3:a:rubicon_project:rubicon_project:*:*:*:*:*:*:*

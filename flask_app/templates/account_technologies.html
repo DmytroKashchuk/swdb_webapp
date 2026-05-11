@@ -1,0 +1,940 @@
+{% extends "base.html" %}
+
+{% block title %}Account Technologies{% endblock %}
+
+{% block extra_head %}
+	<style>
+		.query-card {
+			max-width: 960px;
+			margin: 0 auto 1.5rem;
+			box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+		}
+
+		.section-title {
+			border-left: 3px solid #6366f1;
+			padding-left: 0.6rem;
+			margin: 1.5rem 0 0.75rem;
+		}
+
+		.tabulator .tabulator-header .tabulator-col,
+		.tabulator .tabulator-row .tabulator-cell {
+			white-space: nowrap;
+			font-size: 0.78rem;
+		}
+
+		.tabulator { border-radius: 0.25rem; border: 1px solid #dee2e6; }
+
+		/* Highlight the auto-suggested top site */
+		.tabulator .tabulator-row.row-top-site {
+			background: #fff7ed !important;
+		}
+
+		/* Highlight the user-selected site */
+		.tabulator .tabulator-row.row-selected-site {
+			background: #dbeafe !important;
+		}
+
+		.account-banner {
+			background: #ecfeff;
+			border: 1px solid #a5f3fc;
+			border-radius: 0.4rem;
+			padding: 0.6rem 0.9rem;
+			font-size: 0.85rem;
+		}
+
+		.toolbar {
+			display: flex;
+			gap: 0.75rem;
+			align-items: center;
+			flex-wrap: wrap;
+			margin-bottom: 0.5rem;
+		}
+
+		.final-section {
+			border-top: 2px solid #16a34a;
+			padding-top: 0.75rem;
+			margin-top: 2rem;
+		}
+
+		/* ---------- Compact final view (professional) ---------- */
+		.fs-wrap {
+			background: #ffffff;
+			border: 1px solid #e5e7eb;
+			border-radius: 0.5rem;
+			overflow: hidden;
+			font-size: 0.85rem;
+			color: #111827;
+		}
+		.fs-header {
+			padding: 0.9rem 1.1rem;
+			border-bottom: 1px solid #e5e7eb;
+			background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+		}
+		.fs-header .eyebrow {
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			font-size: 0.7rem;
+			color: #6b7280;
+			font-weight: 600;
+			margin-bottom: 0.15rem;
+		}
+		.fs-header h3 {
+			margin: 0;
+			font-size: 1.05rem;
+			font-weight: 600;
+			color: #111827;
+		}
+		.fs-header .sub {
+			margin-top: 0.15rem;
+			color: #4b5563;
+			font-size: 0.82rem;
+		}
+		.fs-kpis {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+			gap: 0;
+			border-bottom: 1px solid #e5e7eb;
+		}
+		.fs-kpi {
+			padding: 0.7rem 1rem;
+			border-right: 1px solid #e5e7eb;
+		}
+		.fs-kpi:last-child { border-right: 0; }
+		.fs-kpi .k {
+			font-size: 0.7rem;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: #6b7280;
+			font-weight: 600;
+		}
+		.fs-kpi .v {
+			margin-top: 0.15rem;
+			font-size: 1.05rem;
+			font-weight: 600;
+			color: #111827;
+		}
+		.fs-kpi .v.empty { color: #9ca3af; font-weight: 400; font-style: italic; }
+
+		.fs-cols {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 0;
+		}
+		@media (max-width: 768px) {
+			.fs-cols { grid-template-columns: 1fr; }
+			.fs-cols > div + div { border-top: 1px solid #e5e7eb; border-left: 0; }
+		}
+		.fs-cols > div {
+			padding: 0.85rem 1.1rem;
+		}
+		.fs-cols > div + div { border-left: 1px solid #e5e7eb; }
+		.fs-cols h4 {
+			font-size: 0.78rem;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: #374151;
+			margin: 0 0 0.55rem;
+			font-weight: 700;
+		}
+		.fs-dl {
+			display: grid;
+			grid-template-columns: max-content 1fr;
+			column-gap: 0.9rem;
+			row-gap: 0.25rem;
+			font-size: 0.82rem;
+		}
+		.fs-dl dt {
+			color: #6b7280;
+			font-weight: 500;
+		}
+		.fs-dl dd {
+			margin: 0;
+			color: #111827;
+			word-break: break-word;
+		}
+		.fs-dl dd.empty { color: #9ca3af; font-style: italic; }
+		.fs-dl dd a { color: #1d4ed8; text-decoration: none; }
+		.fs-dl dd a:hover { text-decoration: underline; }
+
+		.fs-tech {
+			border-top: 1px solid #e5e7eb;
+			padding: 0.85rem 1.1rem 1rem;
+		}
+		.fs-tech-toolbar {
+			display: flex;
+			gap: 0.6rem;
+			align-items: center;
+			flex-wrap: wrap;
+			margin-bottom: 0.6rem;
+		}
+		.fs-tech-toolbar h4 {
+			font-size: 0.78rem;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: #374151;
+			margin: 0;
+			font-weight: 700;
+		}
+		.fs-tech-toolbar .count {
+			font-size: 0.75rem;
+			color: #6b7280;
+		}
+		.fs-tech-toolbar input[type="search"] {
+			flex: 1;
+			min-width: 200px;
+			max-width: 320px;
+			padding: 0.25rem 0.55rem;
+			font-size: 0.8rem;
+			border: 1px solid #d1d5db;
+			border-radius: 0.3rem;
+		}
+		.fs-tech-groups {
+			column-count: 2;
+			column-gap: 1.5rem;
+		}
+		@media (max-width: 768px) { .fs-tech-groups { column-count: 1; } }
+		.fs-tech-group {
+			break-inside: avoid;
+			margin-bottom: 0.85rem;
+		}
+		.fs-tech-group h5 {
+			font-size: 0.76rem;
+			font-weight: 600;
+			color: #111827;
+			margin: 0 0 0.3rem;
+			padding-bottom: 0.2rem;
+			border-bottom: 1px dashed #e5e7eb;
+		}
+		.fs-tech-group h5 .n {
+			color: #6b7280;
+			font-weight: 400;
+			font-size: 0.72rem;
+			margin-left: 0.25rem;
+		}
+		.fs-tech-list {
+			list-style: none;
+			padding: 0;
+			margin: 0;
+			font-size: 0.8rem;
+		}
+		.fs-tech-list li {
+			padding: 0.15rem 0;
+			display: flex;
+			justify-content: space-between;
+			gap: 0.5rem;
+		}
+		.fs-tech-list li .name { color: #111827; }
+		.fs-tech-list li .vendor { color: #6b7280; font-size: 0.74rem; white-space: nowrap; }
+	</style>
+{% endblock %}
+
+{% block content %}
+<header class="mb-4 text-center">
+	<h1 class="h3 mb-1">Account Technologies</h1>
+	<p class="text-muted mb-0">
+		Search by <strong>site URL</strong>, click a site to load its
+		<strong>account</strong>, all sibling sites and their products.
+	</p>
+</header>
+
+<section class="query-card card mb-4">
+	<div class="card-body">
+		<form id="search-form" class="row g-3 align-items-end">
+			<div class="col-md-7">
+				<label for="site_url" class="form-label fw-semibold">Site URL</label>
+				<input type="text" class="form-control" id="site_url" name="site_url"
+					placeholder="e.g. wyndham.com" required />
+			</div>
+			<div class="col-md-2">
+				<label for="year" class="form-label fw-semibold">Year</label>
+				<select class="form-select" id="year" name="year">
+					<option value="2022" selected>2022</option>
+					<option value="2021">2021</option>
+				</select>
+			</div>
+			<div class="col-md-3 d-grid">
+				<button type="submit" class="btn btn-primary">Search</button>
+			</div>
+			<div class="col-12">
+				<div class="form-check form-switch">
+					<input class="form-check-input" type="checkbox" id="search-uh-toggle">
+					<label class="form-check-label small" for="search-uh-toggle">
+						Only UH (site_type = UH) — applied to matched sites
+					</label>
+				</div>
+			</div>
+		</form>
+	</div>
+</section>
+
+<div id="status" class="mb-3"></div>
+
+<!-- ============== STEP 1a: matched accounts by URL ============== -->
+<section id="accounts-match-section" class="d-none">
+	<h2 class="h5 section-title">Matched accounts <span class="text-muted small" id="accounts-match-meta"></span></h2>
+	<div class="toolbar">
+		<div class="form-check form-switch mb-0">
+			<input class="form-check-input" type="checkbox" id="accounts-match-preferred-toggle">
+			<label class="form-check-label small" for="accounts-match-preferred-toggle">Preferred columns</label>
+		</div>
+	</div>
+	<div id="accounts-match-table"></div>
+</section>
+
+<!-- ============== STEP 1b: matched sites by URL ============== -->
+<section id="matched-section" class="d-none mt-4">
+	<h2 class="h5 section-title">Matched sites <span class="text-muted small" id="matched-meta"></span></h2>
+	<div class="toolbar">
+		<div class="form-check form-switch mb-0">
+			<input class="form-check-input" type="checkbox" id="matched-preferred-toggle">
+			<label class="form-check-label small" for="matched-preferred-toggle">Preferred columns</label>
+		</div>
+		<div class="form-check form-switch mb-0">
+			<input class="form-check-input" type="checkbox" id="matched-uh-toggle">
+			<label class="form-check-label small" for="matched-uh-toggle">Only UH (site_type = UH)</label>
+		</div>
+		<span class="badge bg-warning text-dark">orange = top by employees</span>
+		<span class="badge bg-primary">blue = your selection</span>
+		<span class="text-muted small">Click a <code>site_id</code> to load its account.</span>
+	</div>
+	<div id="matched-table"></div>
+</section>
+
+<!-- ============== STEP 2: account drill-down ============== -->
+<section id="account-section" class="d-none mt-4">
+	<div class="account-banner mb-2" id="account-banner"></div>
+
+	<h2 class="h5 section-title">Account <span id="account-id-label"></span></h2>
+	<div class="toolbar">
+		<div class="form-check form-switch mb-0">
+			<input class="form-check-input" type="checkbox" id="account-preferred-toggle">
+			<label class="form-check-label small" for="account-preferred-toggle">Preferred columns</label>
+		</div>
+	</div>
+	<div id="account-table"></div>
+
+	<h2 class="h5 section-title mt-4">
+		Sites under this account (sorted by employees)
+		<small class="text-muted">— <span class="badge bg-warning text-dark">orange = top by employees</span></small>
+	</h2>
+	<div class="toolbar">
+		<div class="form-check form-switch mb-0">
+			<input class="form-check-input" type="checkbox" id="sites-preferred-toggle">
+			<label class="form-check-label small" for="sites-preferred-toggle">Preferred columns</label>
+		</div>
+		<div class="form-check form-switch mb-0">
+			<input class="form-check-input" type="checkbox" id="sites-uh-toggle">
+			<label class="form-check-label small" for="sites-uh-toggle">Only UH (site_type = UH)</label>
+		</div>
+	</div>
+	<div id="sites-table"></div>
+
+	<!-- ============== STEP 3: final consolidated selection ============== -->
+	<section class="final-section">
+		<h2 class="h5 section-title" style="border-left-color:#16a34a;">Final selection</h2>
+		<div class="toolbar">
+			<div class="btn-group btn-group-sm" role="group" aria-label="Final view mode">
+				<input type="radio" class="btn-check" name="final-mode" id="final-mode-compact" value="compact" checked>
+				<label class="btn btn-outline-success" for="final-mode-compact">Compact (cards)</label>
+				<input type="radio" class="btn-check" name="final-mode" id="final-mode-expanded" value="expanded">
+				<label class="btn btn-outline-success" for="final-mode-expanded">Expanded (1 row per product)</label>
+			</div>
+		</div>
+		<p class="text-muted small mb-2" id="final-meta"></p>
+		<div id="final-compact" class="d-none"></div>
+		<div id="final-table"></div>
+	</section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+	<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+	<script>
+		// ---------- preferred columns ----------
+		const PREFERRED_SITE_COLS = [
+			"site_id",
+			"account_id",
+			"account_name",
+			"site_name",
+			"site_trade_name",
+			"site_street1",
+			"site_city",
+			"site_state",
+			"site_country",
+			"site_employees",
+			"site_revenue_usd",
+			"site_url",
+			"site_govt_level",
+			"site_county",
+			"site_type",
+			"sic2_desc",
+			"product_count",
+		];
+
+		const PREFERRED_ACCOUNT_COLS = [
+			"account_id",
+			"account_name",
+			"account_trade_name",
+			"account_street1",
+			"account_city",
+			"account_postal_state",
+			"account_country",
+			"account_employees",
+			"account_it_employees",
+			"account_revenue_usd",
+			"account_ict_spending",
+			"account_url",
+			"account_nb_sites",
+			"account_nb_countries",
+		];
+
+		// ---------- helpers ----------
+		const fmtInt = (v) => (v == null || v === "" ? "" : Number(v).toLocaleString());
+		const numericLikeFields = new Set([
+			"site_employees", "site_it_employees", "site_revenue_usd",
+			"site_revenue_euros", "site_revenue_pounds", "site_ict_spending",
+			"site_hw_spending", "site_sw_spending", "site_it_comnet_spending",
+			"site_it_services_spending", "site_it_staff_spending",
+			"site_telco_spending", "account_employees", "account_it_employees",
+			"account_revenue_usd", "account_revenue_euros", "account_revenue_pounds",
+			"account_ict_spending", "account_hw_spending", "account_sw_spending",
+			"account_it_comnet_spending", "account_it_services_spending",
+			"account_it_staff_spending", "account_telco_spending",
+			"account_nb_sites", "account_nb_countries", "site_servers",
+			"site_workstations", "site_pcs", "site_desktops", "site_laptops",
+			"site_tablets", "site_printers", "site_storage", "product_count",
+		]);
+
+		function buildColumnDefs(columns, options) {
+			options = options || {};
+			const siteIdClickable = options.siteIdClickable;
+			return columns.map((name) => {
+				const def = {
+					title: name,
+					field: name,
+					headerSort: true,
+					headerFilter: "input",
+					sorter: numericLikeFields.has(name) ? "number" : "string",
+				};
+				if (numericLikeFields.has(name)) {
+					def.hozAlign = "right";
+					def.formatter = (cell) => fmtInt(cell.getValue());
+				}
+				if (siteIdClickable && name === "site_id") {
+					def.formatter = (cell) => {
+						const v = cell.getValue();
+						return `<a href="#" data-siteid="${v}">${v}</a>`;
+					};
+					def.cellClick = (e, cell) => {
+						e.preventDefault();
+						loadAccount(cell.getValue(), true);
+					};
+				}
+				return def;
+			});
+		}
+
+		function applyPreferred(table, allCols, preferredList, on) {
+			if (!table) return;
+			const target = on
+				? new Set(preferredList.filter((c) => allCols.includes(c)))
+				: new Set(allCols);
+			allCols.forEach((c) => {
+				if (target.has(c)) table.showColumn(c);
+				else table.hideColumn(c);
+			});
+		}
+
+		// ---------- state ----------
+		let lastSiteUrl = "";
+
+		let accountsMatchTable = null;
+		let accountsMatchColumns = [];
+
+		let matchedTable = null;
+		let matchedColumns = [];
+		let matchedRows = [];
+		let matchedTopSiteId = null;
+		let matchedSelectedSiteId = null;
+
+		let accountTable = null;
+		let accountColumns = [];
+
+		let sitesTable = null;
+		let sitesColumns = [];
+		let sitesRows = [];
+		let sitesTopId = null;
+
+		let productsTable = null; // (deprecated, kept for safe destroy)
+		let finalTable = null;
+
+		const statusEl = document.getElementById("status");
+
+		function destroyAll() {
+			[accountsMatchTable, matchedTable, accountTable, sitesTable, productsTable, finalTable]
+				.forEach((t) => { if (t) try { t.destroy(); } catch (_) {} });
+			accountsMatchTable = matchedTable = accountTable = sitesTable = productsTable = finalTable = null;
+		}
+
+		// ---------- step 1: search by URL ----------
+		document.getElementById("search-form").addEventListener("submit", async (ev) => {
+			ev.preventDefault();
+			const site_url = document.getElementById("site_url").value.trim();
+			const year = document.getElementById("year").value;
+			if (!site_url) return;
+			lastSiteUrl = site_url;
+
+			statusEl.innerHTML = `<div class="alert alert-info">Searching…</div>`;
+			document.getElementById("accounts-match-section").classList.add("d-none");
+			document.getElementById("matched-section").classList.add("d-none");
+			document.getElementById("account-section").classList.add("d-none");
+			destroyAll();
+
+			try {
+				const { data } = await axios.get("{{ url_for('account_technologies_sites_api') }}", {
+					params: { site_url, year },
+				});
+				statusEl.innerHTML = "";
+				renderAccountsMatch(data);
+				renderMatched(data);
+				if (data.top_site_id) {
+					loadAccount(data.top_site_id, false);
+				}
+			} catch (err) {
+				const msg = (err.response && err.response.data && err.response.data.error) || err.message || "Unknown error";
+				statusEl.innerHTML = `<div class="alert alert-danger">${msg}</div>`;
+			}
+		});
+
+		function renderAccountsMatch(data) {
+			const cols = data.account_columns || [];
+			const rows = data.accounts || [];
+			if (!rows.length) return;
+			accountsMatchColumns = cols;
+			document.getElementById("accounts-match-section").classList.remove("d-none");
+			document.getElementById("accounts-match-meta").textContent =
+				`(${rows.length} account${rows.length === 1 ? "" : "s"} with account_url = "${data.site_url}")`;
+
+			accountsMatchTable = new Tabulator("#accounts-match-table", {
+				data: rows,
+				columns: buildColumnDefs(cols, {}),
+				layout: "fitDataStretch",
+				pagination: "local",
+				paginationSize: 25,
+				resizableColumns: true,
+			});
+			const pref = document.getElementById("accounts-match-preferred-toggle");
+			pref.checked = true;
+			accountsMatchTable.on("tableBuilt", () =>
+				applyPreferred(accountsMatchTable, accountsMatchColumns, PREFERRED_ACCOUNT_COLS, true));
+			pref.onchange = () =>
+				applyPreferred(accountsMatchTable, accountsMatchColumns, PREFERRED_ACCOUNT_COLS, pref.checked);
+		}
+
+		function renderMatched(data) {
+			matchedColumns = data.columns;
+			matchedRows = data.rows;
+			matchedTopSiteId = data.top_site_id;
+			matchedSelectedSiteId = data.top_site_id;
+
+			if (!matchedRows.length) return;
+			document.getElementById("matched-section").classList.remove("d-none");
+			document.getElementById("matched-meta").textContent =
+				`(${matchedRows.length} site${matchedRows.length === 1 ? "" : "s"} for "${data.site_url}", year ${data.year})`;
+
+			matchedTable = new Tabulator("#matched-table", {
+				data: matchedRows,
+				columns: buildColumnDefs(matchedColumns, { siteIdClickable: true }),
+				layout: "fitDataStretch",
+				pagination: "local",
+				paginationSize: 25,
+				resizableColumns: true,
+				rowFormatter: (row) => {
+					const sid = row.getData().site_id;
+					row.getElement().classList.toggle("row-top-site", sid === matchedTopSiteId);
+					row.getElement().classList.toggle("row-selected-site", sid === matchedSelectedSiteId);
+				},
+			});
+
+			const pref = document.getElementById("matched-preferred-toggle");
+			pref.checked = true;
+			matchedTable.on("tableBuilt", () => {
+				applyPreferred(matchedTable, matchedColumns, PREFERRED_SITE_COLS, true);
+				// honor the search-form UH toggle on initial render
+				const searchUh = document.getElementById("search-uh-toggle");
+				const sectionUh = document.getElementById("matched-uh-toggle");
+				sectionUh.checked = searchUh.checked;
+				if (searchUh.checked) matchedTable.setFilter("site_type", "=", "UH");
+			});
+			pref.onchange = () =>
+				applyPreferred(matchedTable, matchedColumns, PREFERRED_SITE_COLS, pref.checked);
+
+			const uh = document.getElementById("matched-uh-toggle");
+			uh.onchange = () => {
+				if (uh.checked) {
+					matchedTable.setFilter("site_type", "=", "UH");
+				} else {
+					matchedTable.clearFilter();
+				}
+			};
+		}
+
+		// ---------- step 2: load account by site_id ----------
+		async function loadAccount(site_id, scroll) {
+			matchedSelectedSiteId = site_id;
+			if (matchedTable) matchedTable.redraw(true);
+
+			const year = document.getElementById("year").value;
+			statusEl.innerHTML = `<div class="alert alert-info">Loading account for site_id ${site_id}…</div>`;
+
+			try {
+				const { data } = await axios.get("{{ url_for('account_technologies_account_api') }}", {
+					params: { site_id, year },
+				});
+				statusEl.innerHTML = "";
+				renderAccount(data);
+				if (scroll) {
+					document.getElementById("account-section").scrollIntoView({ behavior: "smooth" });
+				}
+			} catch (err) {
+				const msg = (err.response && err.response.data && err.response.data.error) || err.message || "Unknown error";
+				statusEl.innerHTML = `<div class="alert alert-danger">${msg}</div>`;
+			}
+		}
+
+		function renderAccount(data) {
+			document.getElementById("account-section").classList.remove("d-none");
+			document.getElementById("account-id-label").textContent = data.account_id;
+			const acc = data.account || {};
+			document.getElementById("account-banner").innerHTML =
+				`Selected site_id <code>${data.selected_site_id}</code> belongs to account_id
+				 <code>${data.account_id}</code> &mdash;
+				 <strong>${acc.account_name || "(no name)"}</strong>
+				 ${acc.account_url ? `(<a href="https://${acc.account_url}" target="_blank" rel="noopener">${acc.account_url}</a>)` : ""}.`;
+
+			// --- Account table (single row, all account columns) ---
+			accountColumns = data.account_columns;
+			if (accountTable) { accountTable.destroy(); accountTable = null; }
+			accountTable = new Tabulator("#account-table", {
+				data: data.account ? [data.account] : [],
+				columns: buildColumnDefs(accountColumns, {}),
+				layout: "fitDataStretch",
+				resizableColumns: true,
+				height: "180px",
+			});
+			const accPref = document.getElementById("account-preferred-toggle");
+			accPref.checked = true;
+			accountTable.on("tableBuilt", () =>
+				applyPreferred(accountTable, accountColumns, PREFERRED_ACCOUNT_COLS, true));
+			accPref.onchange = () =>
+				applyPreferred(accountTable, accountColumns, PREFERRED_ACCOUNT_COLS, accPref.checked);
+
+			// --- Sites table ---
+			sitesColumns = data.site_columns;
+			sitesRows = data.sites;
+			sitesTopId = data.top_site_id;
+
+			if (sitesTable) { sitesTable.destroy(); sitesTable = null; }
+			sitesTable = new Tabulator("#sites-table", {
+				data: sitesRows,
+				columns: buildColumnDefs(sitesColumns, { siteIdClickable: true }),
+				layout: "fitDataStretch",
+				pagination: "local",
+				paginationSize: 25,
+				resizableColumns: true,
+				initialSort: [{ column: "site_employees", dir: "desc" }],
+				rowFormatter: (row) => {
+					const sid = String(row.getData().site_id);
+					row.getElement().classList.toggle("row-top-site", sid === String(sitesTopId));
+				},
+			});
+			const sitesPref = document.getElementById("sites-preferred-toggle");
+			sitesPref.checked = true;
+			sitesTable.on("tableBuilt", () =>
+				applyPreferred(sitesTable, sitesColumns, PREFERRED_SITE_COLS, true));
+			sitesPref.onchange = () =>
+				applyPreferred(sitesTable, sitesColumns, PREFERRED_SITE_COLS, sitesPref.checked);
+
+			const sitesUh = document.getElementById("sites-uh-toggle");
+			sitesUh.checked = false;
+			sitesUh.onchange = () => {
+				if (sitesUh.checked) {
+					sitesTable.setFilter("site_type", "=", "UH");
+				} else {
+					sitesTable.clearFilter();
+				}
+			};
+
+			// --- Final consolidated selection ---
+			renderFinal(data);
+		}
+
+		// ---------- step 3: final consolidated table ----------
+		let lastFinalData = null;
+
+		function renderFinal(data) {
+			lastFinalData = data;
+			const mode = document.querySelector('input[name="final-mode"]:checked').value;
+			renderFinalMode(data, mode);
+		}
+
+		document.querySelectorAll('input[name="final-mode"]').forEach((el) => {
+			el.addEventListener("change", () => {
+				if (lastFinalData) renderFinalMode(lastFinalData, el.value);
+			});
+		});
+
+		function renderFinalMode(data, mode) {
+			const acc = data.account || {};
+			const topSite = (data.sites || []).find((s) => String(s.site_id) === String(data.top_site_id)) || {};
+			const topSiteId = String(data.top_site_id || "");
+			const topProducts = (data.products || []).filter((p) => String(p.site_id) === topSiteId);
+
+			const searchCols = [
+				{ title: "searched_url", field: "searched_url", headerFilter: "input" },
+				{ title: "matched_account_id", field: "matched_account_id", headerFilter: "input" },
+				{ title: "matched_site_name", field: "matched_site_name", headerFilter: "input" },
+				{ title: "matched_account_name", field: "matched_account_name", headerFilter: "input" },
+			];
+			const accCols = PREFERRED_ACCOUNT_COLS
+				.filter((c) => (data.account_columns || []).includes(c))
+				.map((name) => {
+					const def = { title: "acc." + name, field: "acc__" + name, headerFilter: "input" };
+					if (numericLikeFields.has(name)) {
+						def.hozAlign = "right";
+						def.formatter = (cell) => fmtInt(cell.getValue());
+						def.sorter = "number";
+					}
+					return def;
+				});
+			const siteCols = PREFERRED_SITE_COLS
+				.filter((c) => (data.site_columns || []).includes(c))
+				.map((name) => {
+					const def = { title: "site." + name, field: "site__" + name, headerFilter: "input" };
+					if (numericLikeFields.has(name)) {
+						def.hozAlign = "right";
+						def.formatter = (cell) => fmtInt(cell.getValue());
+						def.sorter = "number";
+					}
+					return def;
+				});
+
+			const baseRow = {
+				searched_url: lastSiteUrl,
+				matched_account_id: data.account_id,
+				matched_site_name: topSite.site_name || "",
+				matched_account_name: acc.account_name || "",
+			};
+			(data.account_columns || []).forEach((c) => { baseRow["acc__" + c] = acc[c]; });
+			(data.site_columns || []).forEach((c) => { baseRow["site__" + c] = topSite[c]; });
+
+			const compactEl = document.getElementById("final-compact");
+			const tableEl = document.getElementById("final-table");
+
+			if (mode === "compact") {
+				// Hide table, show pretty cards (no Tabulator).
+				if (finalTable) { finalTable.destroy(); finalTable = null; }
+				tableEl.classList.add("d-none");
+				compactEl.classList.remove("d-none");
+				compactEl.innerHTML = renderCompactHtml(data, topSite, topProducts, acc);
+				document.getElementById("final-meta").textContent =
+					`Compact view: summary of the top-employee site (${topSite.site_name || ""}) with all ${topProducts.length} product(s).`;
+				return;
+			}
+
+			// Expanded: 1 row per product (Tabulator).
+			compactEl.classList.add("d-none");
+			compactEl.innerHTML = "";
+			tableEl.classList.remove("d-none");
+
+			const productCols = [
+				{ title: "product", field: "product", headerFilter: "input" },
+				{ title: "product_vendor", field: "product_vendor", headerFilter: "input" },
+				{ title: "product_category", field: "product_category", headerFilter: "input" },
+				{ title: "product_series", field: "product_series", headerFilter: "input" },
+				{ title: "product_id", field: "product_id" },
+			];
+			const columns = [].concat(searchCols, accCols, siteCols, productCols);
+			const rows = topProducts.length
+				? topProducts.map((p) => Object.assign({}, baseRow, {
+					product: p.product,
+					product_vendor: p.product_vendor,
+					product_category: p.product_category,
+					product_series: p.product_series,
+					product_id: p.product_id,
+				}))
+				: [baseRow];
+			document.getElementById("final-meta").textContent =
+				`Expanded view: ${rows.length} row(s) — one per product of the top-employee site.`;
+
+			if (finalTable) { finalTable.destroy(); finalTable = null; }
+			finalTable = new Tabulator("#final-table", {
+				data: rows,
+				columns: columns,
+				layout: "fitDataStretch",
+				pagination: "local",
+				paginationSize: 25,
+				resizableColumns: true,
+				placeholder: "No data.",
+			});
+		}
+
+		function escapeHtml(v) {
+			if (v == null) return "";
+			return String(v)
+				.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+				.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+		}
+
+		function fmtVal(v, numeric) {
+			if (v == null || v === "") return null;
+			if (numeric) {
+				const n = Number(v);
+				if (!isNaN(n)) return n.toLocaleString();
+			}
+			return String(v);
+		}
+
+		function dlRow(label, value, numeric) {
+			const formatted = fmtVal(value, numeric);
+			if (formatted == null) {
+				return `<dt>${escapeHtml(label)}</dt><dd class="empty">—</dd>`;
+			}
+			// Auto-link URLs in *_url fields
+			if (/url$/i.test(label) && !/^https?:/i.test(formatted)) {
+				const safe = escapeHtml(formatted);
+				return `<dt>${escapeHtml(label)}</dt><dd><a href="https://${safe}" target="_blank" rel="noopener">${safe}</a></dd>`;
+			}
+			return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(formatted)}</dd>`;
+		}
+
+		function kpiTile(label, value, numeric) {
+			const formatted = fmtVal(value, numeric);
+			const v = formatted == null
+				? '<div class="v empty">—</div>'
+				: `<div class="v">${escapeHtml(formatted)}</div>`;
+			return `<div class="fs-kpi"><div class="k">${escapeHtml(label)}</div>${v}</div>`;
+		}
+
+		function renderCompactHtml(data, topSite, topProducts, acc) {
+			const headerName = acc.account_name || topSite.site_name || "(unnamed account)";
+			const headerSub = [topSite.site_city, topSite.site_state, topSite.site_country]
+				.filter(Boolean).join(", ");
+			const urlForLink = acc.account_url || topSite.site_url;
+			const urlHtml = urlForLink
+				? ` &middot; <a href="https://${escapeHtml(urlForLink)}" target="_blank" rel="noopener">${escapeHtml(urlForLink)}</a>`
+				: "";
+
+			const header = `
+				<div class="fs-header">
+					<div class="eyebrow">Final selection · searched “${escapeHtml(lastSiteUrl)}”</div>
+					<h3>${escapeHtml(headerName)}</h3>
+					<div class="sub">
+						account_id <code>${escapeHtml(data.account_id)}</code> &middot;
+						site_id <code>${escapeHtml(data.top_site_id)}</code>
+						${headerSub ? "&middot; " + escapeHtml(headerSub) : ""}
+						${urlHtml}
+					</div>
+				</div>`;
+
+			const kpis = `
+				<div class="fs-kpis">
+					${kpiTile("site employees", topSite.site_employees, true)}
+					${kpiTile("site revenue (USD)", topSite.site_revenue_usd, true)}
+					${kpiTile("account employees", acc.account_employees, true)}
+					${kpiTile("account revenue (USD)", acc.account_revenue_usd, true)}
+					${kpiTile("# sites in account", acc.account_nb_sites, true)}
+					${kpiTile("# technologies", topProducts.length, true)}
+				</div>`;
+
+			const accFields = PREFERRED_ACCOUNT_COLS
+				.filter((c) => (data.account_columns || []).includes(c))
+				.map((c) => dlRow(c, acc[c], numericLikeFields.has(c)))
+				.join("");
+			const siteFields = PREFERRED_SITE_COLS
+				.filter((c) => (data.site_columns || []).includes(c))
+				.map((c) => dlRow(c, topSite[c], numericLikeFields.has(c)))
+				.join("");
+
+			const body = `
+				<div class="fs-cols">
+					<div>
+						<h4>Account details</h4>
+						<dl class="fs-dl">${accFields}</dl>
+					</div>
+					<div>
+						<h4>Top-employees site details</h4>
+						<dl class="fs-dl">${siteFields}</dl>
+					</div>
+				</div>`;
+
+			// --- Technologies grouped by category ---
+			let techHtml;
+			if (!topProducts.length) {
+				techHtml = `<div class="fs-tech"><h4 style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;color:#374151;margin:0 0 0.4rem;">Technologies</h4><div class="text-muted small">No products found for this site.</div></div>`;
+			} else {
+				const groups = new Map();
+				for (const p of topProducts) {
+					const cat = (p.product_category || "Uncategorized").trim() || "Uncategorized";
+					if (!groups.has(cat)) groups.set(cat, []);
+					groups.get(cat).push(p);
+				}
+				const sortedCats = Array.from(groups.keys()).sort((a, b) => {
+					if (a === "Uncategorized") return 1;
+					if (b === "Uncategorized") return -1;
+					return a.localeCompare(b);
+				});
+				const groupsHtml = sortedCats.map((cat) => {
+					const items = groups.get(cat)
+						.slice()
+						.sort((a, b) => (a.product || "").localeCompare(b.product || ""));
+					const lis = items.map((p) => {
+						const name = escapeHtml(p.product || p.product_id || "?");
+						const vendor = p.product_vendor ? `<span class="vendor">${escapeHtml(p.product_vendor)}</span>` : "";
+						const search = (p.product + " " + (p.product_vendor || "") + " " + cat).toLowerCase();
+						return `<li data-search="${escapeHtml(search)}"><span class="name">${name}</span>${vendor}</li>`;
+					}).join("");
+					return `
+						<div class="fs-tech-group" data-cat="${escapeHtml(cat)}">
+							<h5>${escapeHtml(cat)} <span class="n">(${items.length})</span></h5>
+							<ul class="fs-tech-list">${lis}</ul>
+						</div>`;
+				}).join("");
+
+				techHtml = `
+					<div class="fs-tech">
+						<div class="fs-tech-toolbar">
+							<h4>Technologies</h4>
+							<span class="count">${topProducts.length} product${topProducts.length === 1 ? "" : "s"} · ${sortedCats.length} categor${sortedCats.length === 1 ? "y" : "ies"}</span>
+							<input type="search" id="fs-tech-search" placeholder="Filter products or vendors…">
+						</div>
+						<div class="fs-tech-groups">${groupsHtml}</div>
+					</div>`;
+			}
+
+			const html = `<div class="fs-wrap">${header}${kpis}${body}${techHtml}</div>`;
+
+			// Wire the search input after the HTML is inserted (caller appends to DOM).
+			setTimeout(() => {
+				const search = document.getElementById("fs-tech-search");
+				if (!search) return;
+				search.addEventListener("input", () => {
+					const q = search.value.trim().toLowerCase();
+					document.querySelectorAll(".fs-tech-group").forEach((g) => {
+						let anyVisible = false;
+						g.querySelectorAll("li").forEach((li) => {
+							const hit = !q || li.dataset.search.indexOf(q) !== -1;
+							li.style.display = hit ? "" : "none";
+							if (hit) anyVisible = true;
+						});
+						g.style.display = anyVisible ? "" : "none";
+					});
+				});
+			}, 0);
+
+			return html;
+		}
+	</script>
+{% endblock %}

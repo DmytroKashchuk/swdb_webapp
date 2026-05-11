@@ -69,10 +69,20 @@
 							<a class="nav-link {% if request.endpoint == 'technology_history' %}active{% endif %}" href="{{ url_for('technology_history') }}">Technology History</a>
 						</li>
 						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'account_technologies' %}active{% endif %}" href="{{ url_for('account_technologies') }}">Account Technologies</a>
+						</li>
+						<li class="nav-item">
 							<a class="nav-link {% if request.endpoint == 'swdb_structure' %}active{% endif %}" href="{{ url_for('swdb_structure') }}">SWDB Structure</a>
 						</li>
 						<li class="nav-item">
 							<a class="nav-link {% if request.endpoint == 'swdb_schema' %}active{% endif %}" href="{{ url_for('swdb_schema') }}">SWDB Schema</a>
+						</li>
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle {% if request.endpoint in ('cpe_mapping', 'cve_summary') %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">CVE / CPE</a>
+							<ul class="dropdown-menu">
+								<li><a class="dropdown-item {% if request.endpoint == 'cpe_mapping' %}active{% endif %}" href="{{ url_for('cpe_mapping') }}">CPE Mapping</a></li>
+								<li><a class="dropdown-item {% if request.endpoint == 'cve_summary' %}active{% endif %}" href="{{ url_for('cve_summary') }}">CVE Summary</a></li>
+							</ul>
 						</li>
 					</ul>
 				</div>
