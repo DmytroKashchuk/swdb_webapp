@@ -4,6 +4,12 @@
 
 {% block extra_head %}
 <style>
+	.page-intro {
+		font-size: .9rem;
+		color: #555;
+		max-width: 900px;
+		margin-bottom: 1.25rem;
+	}
 	.toolbar {
 		display: flex;
 		flex-wrap: wrap;
@@ -14,31 +20,6 @@
 	.toolbar .btn-sm {
 		font-size: .8rem;
 		padding: .4rem .75rem;
-	}
-	.stat-cards {
-		display: flex;
-		flex-wrap: wrap;
-		gap: .75rem;
-		margin-bottom: 1.25rem;
-	}
-	.stat-card {
-		background: #fff;
-		border: 1px solid #e0e0e0;
-		border-radius: 6px;
-		padding: .6rem 1.1rem;
-		min-width: 150px;
-		text-align: center;
-	}
-	.stat-card .stat-value {
-		font-size: 1.4rem;
-		font-weight: 700;
-		color: #333;
-	}
-	.stat-card .stat-label {
-		font-size: .72rem;
-		color: #888;
-		text-transform: uppercase;
-		letter-spacing: .3px;
 	}
 	.col-toggle-panel {
 		border: 1px solid #e0e0e0;
@@ -79,8 +60,9 @@
 <div class="container-fluid">
 	<h4 class="mb-3">{{ title }}</h4>
 
-	<!-- Stat cards (update on filtering) -->
-	<div class="stat-cards" id="statCards"></div>
+	{% if description %}
+	<p class="page-intro">{{ description }}</p>
+	{% endif %}
 
 	<!-- Toolbar -->
 	<div class="toolbar">
@@ -166,54 +148,10 @@ document.addEventListener("DOMContentLoaded", function () {
 		headerSortTriState: true,
 	});
 
-	function buildStatCards() {
-		const container = document.getElementById("statCards");
-		container.innerHTML = "";
-		const cards = [{ id: "rows", label: "Rows" }];
-
-		// One sum card per numeric column
-		colMeta.filter(function (c) { return c.numeric; }).forEach(function (c) {
-			cards.push({ id: "sum::" + c.field, label: "Σ " + c.field });
-		});
-		// Unique-count card for low-cardinality text columns (<= 200 uniques)
-		colMeta.filter(function (c) { return !c.numeric; }).forEach(function (c) {
-			const uniques = new Set(allData.map(function (r) { return r[c.field]; }).filter(function (v) { return v !== null && v !== ""; }));
-			if (uniques.size > 1 && uniques.size <= 200) {
-				cards.push({ id: "uniq::" + c.field, label: "Unique " + c.field });
-			}
-		});
-
-		cards.forEach(function (card) {
-			const div = document.createElement("div");
-			div.className = "stat-card";
-			div.innerHTML = '<div class="stat-value" data-card="' + card.id + '">-</div><div class="stat-label">' + card.label + "</div>";
-			container.appendChild(div);
-		});
-	}
-
 	function refreshStats() {
-		const items = table.getRows("active").map(function (r) { return r.getData(); });
-		document.getElementById("rowCount").textContent = items.length.toLocaleString();
+		const active = table.getRows("active").length;
+		document.getElementById("rowCount").textContent = active.toLocaleString();
 		document.getElementById("totalCount").textContent = allData.length.toLocaleString();
-
-		document.querySelectorAll("[data-card]").forEach(function (el) {
-			const key = el.getAttribute("data-card");
-			if (key === "rows") {
-				el.textContent = items.length.toLocaleString();
-			} else if (key.indexOf("sum::") === 0) {
-				const field = key.slice(5);
-				let sum = 0;
-				items.forEach(function (r) {
-					const v = parseFloat(r[field]);
-					if (!isNaN(v)) sum += v;
-				});
-				el.textContent = Math.round(sum).toLocaleString();
-			} else if (key.indexOf("uniq::") === 0) {
-				const field = key.slice(6);
-				const s = new Set(items.map(function (r) { return r[field]; }).filter(function (v) { return v !== null && v !== ""; }));
-				el.textContent = s.size.toLocaleString();
-			}
-		});
 	}
 
 	function buildColumnToggles() {
@@ -248,7 +186,6 @@ document.addEventListener("DOMContentLoaded", function () {
 			allData = data.rows;
 			table.setColumns(buildColumns(colMeta));
 			table.setData(allData).then(function () {
-				buildStatCards();
 				buildColumnToggles();
 				refreshStats();
 			});

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — General Info{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro {
+		font-size: .9rem;
+		color: #555;
+		max-width: 900px;
+		margin-bottom: 1.5rem;
+	}
+	.avail-table {
+		background: #fff;
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		overflow: hidden;
+		font-size: .88rem;
+		max-width: 760px;
+	}
+	.avail-table th {
+		background: #f2f2f5;
+		font-weight: 600;
+		color: #444;
+		font-size: .8rem;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		text-align: center;
+		white-space: nowrap;
+	}
+	.avail-table td, .avail-table th {
+		padding: .5rem .8rem;
+		border-bottom: 1px solid #eee;
+		text-align: center;
+	}
+	.avail-table th:first-child, .avail-table td:first-child {
+		text-align: left;
+		font-weight: 600;
+		color: #333;
+	}
+	.avail-table tbody tr:last-child td { border-bottom: none; }
+	.avail-table tbody tr:hover td { background: #fafafc; }
+	.mark-yes { color: #2e7d32; font-weight: 700; }
+	.mark-no { color: #ccc; }
+	.legend {
+		font-size: .8rem;
+		color: #666;
+		margin-top: .75rem;
+	}
+	.legend .mark-yes { margin-right: .25rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set region_cols = [
+	('APac', 'APAC'),
+	('Canada', 'Canada'),
+	('EMEA', 'EMEA'),
+	('Europe', 'Europe'),
+	('LatinAmerica', 'Latin America'),
+	('USA', 'USA')
+] %}
+
+<div class="container-fluid">
+	<h4 class="mb-3">{{ title }}</h4>
+	<p class="page-intro">
+		Data availability by year and region across the SWDB universe. A check mark indicates
+		that data was collected for that region in the given year.
+	</p>
+
+	{% if error %}
+	<div class="alert alert-danger">{{ error }}</div>
+	{% else %}
+	<div class="table-responsive">
+		<table class="table avail-table mb-0">
+			<thead>
+				<tr>
+					<th>Year</th>
+					{% for key, label in region_cols %}<th>{{ label }}</th>{% endfor %}
+				</tr>
+			</thead>
+			<tbody>
+				{% for row in rows %}
+				<tr>
+					<td>{{ row['year']|int }}</td>
+					{% for key, label in region_cols %}
+					{% set val = row[key] %}
+					<td>
+						{% if val and val|string|lower == 'true' %}
+							<span class="mark-yes">&#10003;</span>
+						{% else %}
+							<span class="mark-no">&ndash;</span>
+						{% endif %}
+					</td>
+					{% endfor %}
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	<div class="legend"><span class="mark-yes">&#10003;</span> available &nbsp;&nbsp; <span class="mark-no">&ndash;</span> not available</div>
+	{% endif %}
+</div>
+{% endblock %}

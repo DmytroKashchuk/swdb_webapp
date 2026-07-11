@@ -82,7 +82,7 @@
 							<ul class="dropdown-menu">
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'enterprises-counts' %}active{% endif %}" href="{{ url_for('general_info', slug='enterprises-counts') }}">Enterprises Counts</a></li>
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs') }}">Universe Installs</a></li>
-								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'product-categories' %}active{% endif %}" href="{{ url_for('general_info', slug='product-categories') }}">Product Categories</a></li>
+								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'product-categories' %}active{% endif %}" href="{{ url_for('general_info', slug='product-categories') }}">Security Products</a></li>
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'years-regions' %}active{% endif %}" href="{{ url_for('general_info', slug='years-regions') }}">Years &amp; Regions Available</a></li>
 							</ul>
 						</li>

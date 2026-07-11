@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — General Info{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro {
+		font-size: .9rem;
+		color: #555;
+		max-width: 900px;
+		margin-bottom: 1.5rem;
+	}
+	.count-section {
+		margin-bottom: 2.25rem;
+	}
+	.count-section h5 {
+		font-size: 1rem;
+		font-weight: 600;
+		color: #333;
+		margin-bottom: .75rem;
+		text-transform: capitalize;
+	}
+	.count-table {
+		background: #fff;
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		overflow: hidden;
+		font-size: .88rem;
+	}
+	.count-table th {
+		background: #f2f2f5;
+		font-weight: 600;
+		color: #444;
+		font-size: .8rem;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		white-space: nowrap;
+	}
+	.count-table td, .count-table th {
+		padding: .55rem .85rem;
+		border-bottom: 1px solid #eee;
+		text-align: right;
+	}
+	.count-table td:first-child, .count-table th:first-child {
+		text-align: left;
+	}
+	.count-table tbody tr:last-child td { border-bottom: none; }
+	.count-table tr.total-row td {
+		font-weight: 700;
+		background: #fafafa;
+		border-top: 2px solid #ddd;
+	}
+	.region-label { font-weight: 500; color: #333; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set region_names = {
+	'apac': 'APAC', 'canada': 'Canada', 'emea': 'EMEA',
+	'latam': 'Latin America', 'usa': 'USA', 'TOTAL': 'Total'
+} %}
+{% set region_order = ['apac', 'canada', 'emea', 'latam', 'usa', 'TOTAL'] %}
+{% set count_cols = [
+	('total', 'Total'),
+	('zero_employees', '0 employees'),
+	('at_least_1', 'At least 1'),
+	('emp_1_50', '1–50'),
+	('emp_51_200', '51–200'),
+	('emp_over_200', 'Over 200')
+] %}
+
+<div class="container-fluid">
+	<h4 class="mb-3">{{ title }}</h4>
+	<p class="page-intro">
+		Counts of sites and enterprises across the SWDB universe, broken down by region and
+		employee-size band.
+	</p>
+
+	{% if error %}
+	<div class="alert alert-danger">{{ error }}</div>
+	{% else %}
+		{% for level in ['sites', 'enterprises'] %}
+		<div class="count-section">
+			<h5>{{ level }}</h5>
+			<div class="table-responsive">
+				<table class="table count-table mb-0">
+					<thead>
+						<tr>
+							<th>Region</th>
+							{% for key, label in count_cols %}<th>{{ label }}</th>{% endfor %}
+						</tr>
+					</thead>
+					<tbody>
+						{% for region in region_order %}
+							{% for row in rows if row['level'] == level and row['region'] == region %}
+							<tr class="{{ 'total-row' if region == 'TOTAL' else '' }}">
+								<td class="region-label">{{ region_names.get(region, region) }}</td>
+								{% for key, label in count_cols %}
+								<td>{{ "{:,}".format(row[key]|int) if row[key] is not none else "" }}</td>
+								{% endfor %}
+							</tr>
+							{% endfor %}
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</div>
+		{% endfor %}
+	{% endif %}
+</div>
+{% endblock %}

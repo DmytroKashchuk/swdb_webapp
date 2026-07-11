@@ -1126,27 +1126,38 @@ GENERAL_INFO_DATASETS = {
 	"enterprises-counts": {
 		"file": "enterprises_counts.csv",
 		"title": "Enterprises Counts",
+		"template": "enterprises_counts.html",
 	},
 	"universe-installs": {
 		"file": "swdb_universe_installs.csv",
 		"title": "Universe Installs",
+		"template": "general_info.html",
+		"dedupe": True,
 	},
 	"product-categories": {
 		"file": "prodcatct-annotated-complete.csv",
-		"title": "Product Categories",
+		"title": "Security Products",
+		"description": (
+			"Curated list of the correct security product categories, mapping each "
+			"vendor product to its validated security category (with Gartner market "
+			"reference where available)."
+		),
+		"template": "general_info.html",
 	},
 	"years-regions": {
 		"file": "swdb_years_regions_available.csv",
 		"title": "Years & Regions Available",
+		"template": "years_regions.html",
 	},
 }
 
 
-def _load_general_info_df(filename):
+def _load_general_info_df(filename, dedupe=False):
 	"""Load a general-info CSV with pandas and normalise it.
 
 	- Reads everything as strings first (so IDs / codes are preserved).
 	- Drops fully empty/unnamed columns.
+	- Optionally removes duplicate rows.
 	- Detects numeric columns (including values formatted like "696,761")
 	  and converts them, returning the list of numeric column names.
 	"""
@@ -1161,6 +1172,9 @@ def _load_general_info_df(filename):
 	)
 	if header_mask.any():
 		df = df[~header_mask].reset_index(drop=True)
+
+	if dedupe:
+		df = df.drop_duplicates().reset_index(drop=True)
 
 	# Drop unnamed / empty header columns that carry no data
 	drop_cols = []
@@ -1194,12 +1208,30 @@ def general_info(slug):
 	dataset = GENERAL_INFO_DATASETS.get(slug)
 	if dataset is None:
 		abort(404)
-	return render_template(
-		"general_info.html",
-		slug=slug,
-		title=dataset["title"],
-		datasets=GENERAL_INFO_DATASETS,
-	)
+
+	template = dataset.get("template", "general_info.html")
+	context = {
+		"slug": slug,
+		"title": dataset["title"],
+		"description": dataset.get("description"),
+		"datasets": GENERAL_INFO_DATASETS,
+	}
+
+	# Pretty, server-rendered presentation pages get their data up-front.
+	if template != "general_info.html":
+		try:
+			df, numeric_cols = _load_general_info_df(
+				dataset["file"], dedupe=dataset.get("dedupe", False)
+			)
+			df = df.where(pd.notnull(df), None)
+			context["columns"] = [
+				{"field": str(c), "numeric": c in numeric_cols} for c in df.columns
+			]
+			context["rows"] = df.to_dict(orient="records")
+		except Exception as exc:  # pragma: no cover
+			context["error"] = str(exc)
+
+	return render_template(template, **context)
 
 
 @app.route("/api/general-info/<slug>")
@@ -1210,7 +1242,9 @@ def general_info_api(slug):
 		return jsonify({"error": "Unknown dataset."}), 404
 
 	try:
-		df, numeric_cols = _load_general_info_df(dataset["file"])
+		df, numeric_cols = _load_general_info_df(
+			dataset["file"], dedupe=dataset.get("dedupe", False)
+		)
 	except FileNotFoundError:
 		return jsonify({"error": "CSV file not found."}), 404
 	except Exception as exc:  # pragma: no cover - simple error surface

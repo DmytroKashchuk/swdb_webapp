@@ -33,6 +33,38 @@
   }
   #header h1 span { color: #94a3b8; font-weight: 400; }
 
+  .nav-menu { position: relative; }
+  .nav-menu summary {
+    list-style: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 600;
+    padding: 6px 14px; border-radius: 6px;
+    border: 1px solid #d1d5db; background: #fff; color: #64748b;
+    cursor: pointer; user-select: none;
+  }
+  .nav-menu summary::-webkit-details-marker { display: none; }
+  .nav-menu summary:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+  .nav-menu[open] summary { border-color: #2563eb; color: #2563eb; }
+  .nav-menu-list {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 300;
+    background: #fff; border: 1px solid #e2e5ea; border-radius: 8px;
+    padding: 6px; min-width: 220px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+    display: flex; flex-direction: column;
+  }
+  .nav-menu-list a {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; color: #1a1a2e; text-decoration: none;
+    padding: 6px 10px; border-radius: 5px;
+  }
+  .nav-menu-list a:hover { background: #eff6ff; color: #2563eb; }
+  .nav-menu-sep {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 8px 10px 3px; border-top: 1px solid #eef0f3; margin-top: 4px;
+  }
+
   .controls {
     display: flex; gap: 8px; align-items: center;
   }
@@ -399,6 +431,27 @@
 <body>
 
 <div id="header">
+  <details class="nav-menu">
+    <summary>&#9776; Menu</summary>
+    <div class="nav-menu-list">
+      <a href="{{ url_for('index') }}">SQL Explorer</a>
+      <a href="{{ url_for('companies') }}">Companies</a>
+      <a href="{{ url_for('companies_accounts') }}">Companies Accounts</a>
+      <a href="{{ url_for('compare_technologies') }}">Compare Technologies</a>
+      <a href="{{ url_for('technology_history') }}">Technology History</a>
+      <a href="{{ url_for('account_technologies') }}">Account Technologies</a>
+      <a href="{{ url_for('swdb_structure') }}">SWDB Structure</a>
+      <a href="{{ url_for('swdb_schema') }}">SWDB Schema</a>
+      <div class="nav-menu-sep">General Info</div>
+      <a href="{{ url_for('general_info', slug='enterprises-counts') }}">Enterprises Counts</a>
+      <a href="{{ url_for('general_info', slug='universe-installs') }}">Universe Installs</a>
+      <a href="{{ url_for('general_info', slug='product-categories') }}">Security Products</a>
+      <a href="{{ url_for('general_info', slug='years-regions') }}">Years &amp; Regions</a>
+      <div class="nav-menu-sep">CVE / CPE</div>
+      <a href="{{ url_for('cpe_mapping') }}">CPE Mapping</a>
+      <a href="{{ url_for('cve_summary') }}">CVE Summary</a>
+    </div>
+  </details>
   <h1>RDF v4.1 <span>Entity-Relationship Diagram</span></h1>
   <div class="controls">
     <button onclick="resetView()">Reset View</button>
