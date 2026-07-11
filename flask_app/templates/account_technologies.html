@@ -410,6 +410,7 @@
 		function buildColumnDefs(columns, options) {
 			options = options || {};
 			const siteIdClickable = options.siteIdClickable;
+			const onSiteIdClick = options.onSiteIdClick;
 			return columns.map((name) => {
 				const def = {
 					title: name,
@@ -429,7 +430,8 @@
 					};
 					def.cellClick = (e, cell) => {
 						e.preventDefault();
-						loadAccount(cell.getValue(), true);
+						if (onSiteIdClick) onSiteIdClick(cell.getValue());
+						else loadAccount(cell.getValue(), true);
 					};
 				}
 				return def;
@@ -466,6 +468,10 @@
 		let sitesColumns = [];
 		let sitesRows = [];
 		let sitesTopId = null;
+		// The site_id whose technologies are shown in the "Final selection"
+		// section. Defaults to the criteria-picked top site, but updates when
+		// the user clicks another site_id in the "Sites under this account" table.
+		let finalSiteId = null;
 
 		let productsTable = null; // (deprecated, kept for safe destroy)
 		let finalTable = null;
@@ -635,11 +641,24 @@
 			sitesColumns = data.site_columns;
 			sitesRows = data.sites;
 			sitesTopId = data.top_site_id;
+			const sitesSelectedId = data.selected_site_id;
+			// Default the "Final selection" to the criteria-picked top site.
+			finalSiteId = data.top_site_id;
 
 			if (sitesTable) { sitesTable.destroy(); sitesTable = null; }
 			sitesTable = new Tabulator("#sites-table", {
 				data: sitesRows,
-				columns: buildColumnDefs(sitesColumns, { siteIdClickable: true }),
+				columns: buildColumnDefs(sitesColumns, {
+					siteIdClickable: true,
+					onSiteIdClick: (sid) => {
+						finalSiteId = sid;
+						if (sitesTable) sitesTable.redraw(true);
+						if (lastFinalData) {
+							const mode = document.querySelector('input[name="final-mode"]:checked').value;
+							renderFinalMode(lastFinalData, mode);
+						}
+					},
+				}),
 				layout: "fitDataStretch",
 				pagination: "local",
 				paginationSize: 25,
@@ -648,6 +667,7 @@
 				rowFormatter: (row) => {
 					const sid = String(row.getData().site_id);
 					row.getElement().classList.toggle("row-top-site", sid === String(sitesTopId));
+					row.getElement().classList.toggle("row-selected-site", sid === String(finalSiteId) && String(finalSiteId) !== String(sitesTopId));
 				},
 			});
 			const sitesPref = document.getElementById("sites-preferred-toggle");
@@ -688,8 +708,12 @@
 
 		function renderFinalMode(data, mode) {
 			const acc = data.account || {};
-			const topSite = (data.sites || []).find((s) => String(s.site_id) === String(data.top_site_id)) || {};
-			const topSiteId = String(data.top_site_id || "");
+			// Show technologies for the user-selected site in the "Sites under
+			// this account" table; default is the criteria-picked top site
+			// (UH > HQ > other, tie-break by site_revenue_usd).
+			const selectedId = String(finalSiteId || data.top_site_id || "");
+			const topSite = (data.sites || []).find((s) => String(s.site_id) === selectedId) || {};
+			const topSiteId = selectedId;
 			const topProducts = (data.products || []).filter((p) => String(p.site_id) === topSiteId);
 
 			const searchCols = [

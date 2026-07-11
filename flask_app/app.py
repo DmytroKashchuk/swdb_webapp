@@ -892,14 +892,25 @@ def account_technologies_sites_api():
 	if not rows and not account_rows:
 		return jsonify({"error": f"No sites or accounts match '{site_url}' in {year}."}), 404
 
-	def _emp(r):
-		v = r.get("site_employees")
+	def _revenue(r):
+		v = r.get("site_revenue_usd")
 		try:
-			return int(v) if v not in (None, "") else 0
+			return float(v) if v not in (None, "") else 0.0
 		except (TypeError, ValueError):
-			return 0
+			return 0.0
 
-	top = max(rows, key=_emp) if rows else None
+	def _type_rank(r):
+		# Prefer UH, then HQ, then anything else.
+		t = (r.get("site_type") or "").strip().upper()
+		if t == "UH":
+			return 0
+		if t == "HQ":
+			return 1
+		return 2
+
+	# Pick the default highlighted site: prefer site_type=UH, then HQ,
+	# tie-break by highest site_revenue_usd.
+	top = min(rows, key=lambda r: (_type_rank(r), -_revenue(r))) if rows else None
 	return jsonify({
 		"year": year,
 		"site_url": site_url,
@@ -1018,16 +1029,26 @@ def account_technologies_account_api():
 	if "product_count" not in site_columns:
 		site_columns = list(site_columns) + ["product_count"]
 
-	# Top site within this account by employee count
+	# Top site within this account: prefer site_type=UH, then HQ, then any
+	# other type; tie-break by highest site_revenue_usd.
 	top_site_id = None
 	if sites:
-		def _e(s):
-			v = s.get("site_employees")
+		def _rev(s):
+			v = s.get("site_revenue_usd")
 			try:
-				return int(v) if v not in (None, "") else 0
+				return float(v) if v not in (None, "") else 0.0
 			except (TypeError, ValueError):
+				return 0.0
+
+		def _rank(s):
+			t = (s.get("site_type") or "").strip().upper()
+			if t == "UH":
 				return 0
-		top_site = max(sites, key=_e)
+			if t == "HQ":
+				return 1
+			return 2
+
+		top_site = min(sites, key=lambda s: (_rank(s), -_rev(s)))
 		top_site_id = str(top_site.get("site_id"))
 
 	return jsonify({
