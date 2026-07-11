@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, abort
 import markdown
 from pathlib import Path
 import csv
+import pandas as pd
 import psycopg2
 import psycopg2.extras
 
@@ -1114,6 +1115,116 @@ def cve_summary_api():
 	except Exception as exc:
 		return jsonify({"error": str(exc)}), 500
 	return jsonify(rows)
+
+
+# ---------------------------------------------------------------------------
+# General Info CSV browsers
+# ---------------------------------------------------------------------------
+
+# Datasets available under data/swdb_general_info. Order controls the nav menu.
+GENERAL_INFO_DATASETS = {
+	"enterprises-counts": {
+		"file": "enterprises_counts.csv",
+		"title": "Enterprises Counts",
+	},
+	"universe-installs": {
+		"file": "swdb_universe_installs.csv",
+		"title": "Universe Installs",
+	},
+	"product-categories": {
+		"file": "prodcatct-annotated-complete.csv",
+		"title": "Product Categories",
+	},
+	"years-regions": {
+		"file": "swdb_years_regions_available.csv",
+		"title": "Years & Regions Available",
+	},
+}
+
+
+def _load_general_info_df(filename):
+	"""Load a general-info CSV with pandas and normalise it.
+
+	- Reads everything as strings first (so IDs / codes are preserved).
+	- Drops fully empty/unnamed columns.
+	- Detects numeric columns (including values formatted like "696,761")
+	  and converts them, returning the list of numeric column names.
+	"""
+
+	csv_path = Path(__file__).parent / "data" / "swdb_general_info" / filename
+	df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+
+	# Some source files contain the header row repeated inside the data.
+	# Drop any row whose values exactly match the column names.
+	header_mask = df.apply(
+		lambda r: list(r.astype(str)) == [str(c) for c in df.columns], axis=1
+	)
+	if header_mask.any():
+		df = df[~header_mask].reset_index(drop=True)
+
+	# Drop unnamed / empty header columns that carry no data
+	drop_cols = []
+	for col in df.columns:
+		if str(col).strip() == "" or str(col).startswith("Unnamed"):
+			if (df[col].astype(str).str.strip() == "").all():
+				drop_cols.append(col)
+	if drop_cols:
+		df = df.drop(columns=drop_cols)
+
+	numeric_cols = []
+	for col in df.columns:
+		stripped = df[col].astype(str).str.strip()
+		non_empty = stripped[stripped != ""]
+		if non_empty.empty:
+			continue
+		# Remove thousands separators before attempting numeric conversion
+		cleaned = non_empty.str.replace(",", "", regex=False)
+		converted = pd.to_numeric(cleaned, errors="coerce")
+		if converted.notna().all():
+			full = df[col].astype(str).str.strip().str.replace(",", "", regex=False)
+			df[col] = pd.to_numeric(full, errors="coerce")
+			numeric_cols.append(col)
+
+	return df, numeric_cols
+
+
+@app.route("/general-info/<slug>")
+def general_info(slug):
+	"""Render a CSV browser page for one of the general-info datasets."""
+	dataset = GENERAL_INFO_DATASETS.get(slug)
+	if dataset is None:
+		abort(404)
+	return render_template(
+		"general_info.html",
+		slug=slug,
+		title=dataset["title"],
+		datasets=GENERAL_INFO_DATASETS,
+	)
+
+
+@app.route("/api/general-info/<slug>")
+def general_info_api(slug):
+	"""JSON API: return the requested general-info CSV as records + metadata."""
+	dataset = GENERAL_INFO_DATASETS.get(slug)
+	if dataset is None:
+		return jsonify({"error": "Unknown dataset."}), 404
+
+	try:
+		df, numeric_cols = _load_general_info_df(dataset["file"])
+	except FileNotFoundError:
+		return jsonify({"error": "CSV file not found."}), 404
+	except Exception as exc:  # pragma: no cover - simple error surface
+		return jsonify({"error": str(exc)}), 500
+
+	# Replace NaN with None so the JSON is valid
+	df = df.where(pd.notnull(df), None)
+
+	columns = [
+		{"field": str(col), "numeric": col in numeric_cols}
+		for col in df.columns
+	]
+	rows = df.to_dict(orient="records")
+	return jsonify({"columns": columns, "rows": rows})
 
 
 if __name__ == "__main__":

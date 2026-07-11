@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — General Info{% endblock %}
+
+{% block extra_head %}
+<style>
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .6rem;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+	.toolbar .btn-sm {
+		font-size: .8rem;
+		padding: .4rem .75rem;
+	}
+	.stat-cards {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .75rem;
+		margin-bottom: 1.25rem;
+	}
+	.stat-card {
+		background: #fff;
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		padding: .6rem 1.1rem;
+		min-width: 150px;
+		text-align: center;
+	}
+	.stat-card .stat-value {
+		font-size: 1.4rem;
+		font-weight: 700;
+		color: #333;
+	}
+	.stat-card .stat-label {
+		font-size: .72rem;
+		color: #888;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+	}
+	.col-toggle-panel {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		margin-bottom: 1rem;
+		display: none;
+	}
+	.col-toggle-panel.open {
+		display: block;
+	}
+	.col-toggle-grid {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .35rem 1.25rem;
+	}
+	.col-toggle-grid label {
+		font-size: .82rem;
+		color: #444;
+		display: flex;
+		align-items: center;
+		gap: .35rem;
+		margin: 0;
+	}
+	.stats-bar {
+		font-size: .82rem;
+		color: #666;
+		margin-bottom: .5rem;
+	}
+	#data-table {
+		font-size: .85rem;
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-3">{{ title }}</h4>
+
+	<!-- Stat cards (update on filtering) -->
+	<div class="stat-cards" id="statCards"></div>
+
+	<!-- Toolbar -->
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download CSV</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+	</div>
+
+	<!-- Column show/hide panel -->
+	<div class="col-toggle-panel" id="colTogglePanel">
+		<div class="col-toggle-grid" id="colToggleGrid"></div>
+	</div>
+
+	<div class="stats-bar">
+		Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> records
+	</div>
+
+	<div id="data-table"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const apiUrl = "{{ url_for('general_info_api', slug=slug) }}";
+	const fileName = "{{ slug }}.csv";
+	let allData = [];
+	let colMeta = [];
+
+	// Numeric header filter supporting <, >, <=, >=, = operators (e.g. ">100")
+	function numericFilter(headerValue, rowValue) {
+		if (headerValue === "" || headerValue === null || headerValue === undefined) return true;
+		if (rowValue === null || rowValue === undefined || rowValue === "") return false;
+		const m = String(headerValue).trim().match(/^(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)$/);
+		if (!m) return true; // invalid input -> don't filter out
+		const op = m[1] || "=";
+		const target = parseFloat(m[2]);
+		const val = parseFloat(rowValue);
+		if (isNaN(val)) return false;
+		switch (op) {
+			case "<": return val < target;
+			case ">": return val > target;
+			case "<=": return val <= target;
+			case ">=": return val >= target;
+			default: return val === target;
+		}
+	}
+
+	function buildColumns(meta) {
+		return meta.map(function (c) {
+			if (c.numeric) {
+				return {
+					title: c.field,
+					field: c.field,
+					sorter: "number",
+					headerFilter: "input",
+					headerFilterPlaceholder: "e.g. >100",
+					headerFilterFunc: numericFilter,
+					formatter: function (cell) {
+						const v = cell.getValue();
+						return (v === null || v === undefined || v === "") ? "" : Number(v).toLocaleString();
+					},
+				};
+			}
+			return {
+				title: c.field,
+				field: c.field,
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+			};
+		});
+	}
+
+	const table = new Tabulator("#data-table", {
+		height: "68vh",
+		layout: "fitDataFill",
+		placeholder: "Loading data…",
+		pagination: true,
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		movableColumns: true,
+		headerSortTriState: true,
+	});
+
+	function buildStatCards() {
+		const container = document.getElementById("statCards");
+		container.innerHTML = "";
+		const cards = [{ id: "rows", label: "Rows" }];
+
+		// One sum card per numeric column
+		colMeta.filter(function (c) { return c.numeric; }).forEach(function (c) {
+			cards.push({ id: "sum::" + c.field, label: "Σ " + c.field });
+		});
+		// Unique-count card for low-cardinality text columns (<= 200 uniques)
+		colMeta.filter(function (c) { return !c.numeric; }).forEach(function (c) {
+			const uniques = new Set(allData.map(function (r) { return r[c.field]; }).filter(function (v) { return v !== null && v !== ""; }));
+			if (uniques.size > 1 && uniques.size <= 200) {
+				cards.push({ id: "uniq::" + c.field, label: "Unique " + c.field });
+			}
+		});
+
+		cards.forEach(function (card) {
+			const div = document.createElement("div");
+			div.className = "stat-card";
+			div.innerHTML = '<div class="stat-value" data-card="' + card.id + '">-</div><div class="stat-label">' + card.label + "</div>";
+			container.appendChild(div);
+		});
+	}
+
+	function refreshStats() {
+		const items = table.getRows("active").map(function (r) { return r.getData(); });
+		document.getElementById("rowCount").textContent = items.length.toLocaleString();
+		document.getElementById("totalCount").textContent = allData.length.toLocaleString();
+
+		document.querySelectorAll("[data-card]").forEach(function (el) {
+			const key = el.getAttribute("data-card");
+			if (key === "rows") {
+				el.textContent = items.length.toLocaleString();
+			} else if (key.indexOf("sum::") === 0) {
+				const field = key.slice(5);
+				let sum = 0;
+				items.forEach(function (r) {
+					const v = parseFloat(r[field]);
+					if (!isNaN(v)) sum += v;
+				});
+				el.textContent = Math.round(sum).toLocaleString();
+			} else if (key.indexOf("uniq::") === 0) {
+				const field = key.slice(6);
+				const s = new Set(items.map(function (r) { return r[field]; }).filter(function (v) { return v !== null && v !== ""; }));
+				el.textContent = s.size.toLocaleString();
+			}
+		});
+	}
+
+	function buildColumnToggles() {
+		const grid = document.getElementById("colToggleGrid");
+		grid.innerHTML = "";
+		colMeta.forEach(function (c) {
+			const label = document.createElement("label");
+			const cb = document.createElement("input");
+			cb.type = "checkbox";
+			cb.checked = true;
+			cb.addEventListener("change", function () {
+				if (cb.checked) table.showColumn(c.field);
+				else table.hideColumn(c.field);
+			});
+			label.appendChild(cb);
+			label.appendChild(document.createTextNode(c.field));
+			grid.appendChild(label);
+		});
+	}
+
+	table.on("dataFiltered", function () { setTimeout(refreshStats, 0); });
+
+	fetch(apiUrl)
+		.then(function (res) { return res.json(); })
+		.then(function (data) {
+			if (data.error) {
+				document.getElementById("data-table").innerHTML =
+					'<div class="alert alert-danger">' + data.error + "</div>";
+				return;
+			}
+			colMeta = data.columns;
+			allData = data.rows;
+			table.setColumns(buildColumns(colMeta));
+			table.setData(allData).then(function () {
+				buildStatCards();
+				buildColumnToggles();
+				refreshStats();
+			});
+		})
+		.catch(function (err) {
+			document.getElementById("data-table").innerHTML =
+				'<div class="alert alert-danger">Failed to load data: ' + err + "</div>";
+		});
+
+	document.getElementById("btnToggleCols").addEventListener("click", function () {
+		document.getElementById("colTogglePanel").classList.toggle("open");
+	});
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		table.download("csv", fileName);
+	});
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		table.clearFilter(true);
+		table.clearHeaderFilter();
+	});
+});
+</script>
+{% endblock %}
