@@ -8,328 +8,154 @@
 		font-size: .9rem;
 		color: #555;
 		max-width: 900px;
-		margin-bottom: 1.25rem;
+		margin-bottom: 1.5rem;
 	}
-	.stat-card {
-		border: 1px solid #e0e0e0;
-		border-radius: 6px;
-		background: #fff;
-		padding: .75rem .9rem;
-		height: 100%;
+	.count-section {
+		margin-bottom: 2.25rem;
 	}
-	.stat-card .stat-label {
-		font-size: .72rem;
-		text-transform: uppercase;
-		letter-spacing: .3px;
-		color: #777;
-		margin-bottom: .25rem;
-	}
-	.stat-card .stat-value {
-		font-size: 1.25rem;
+	.count-section h5 {
+		font-size: 1rem;
 		font-weight: 600;
 		color: #333;
-		line-height: 1.2;
+		margin-bottom: .75rem;
+		text-transform: capitalize;
 	}
-	.stat-card .stat-sub {
-		font-size: .75rem;
-		color: #888;
-		margin-top: .2rem;
-	}
-	.toolbar {
-		display: flex;
-		flex-wrap: wrap;
-		gap: .6rem;
-		align-items: center;
-		margin-bottom: 1rem;
-	}
-	.toolbar .btn-sm {
-		font-size: .8rem;
-		padding: .4rem .75rem;
-	}
-	.col-toggle-panel {
+	.count-table {
+		background: #fff;
 		border: 1px solid #e0e0e0;
 		border-radius: 6px;
-		background: #fff;
-		padding: .75rem 1rem;
-		margin-bottom: 1rem;
-		display: none;
+		overflow: hidden;
+		font-size: .88rem;
 	}
-	.col-toggle-panel.open {
-		display: block;
-	}
-	.col-toggle-grid {
-		display: flex;
-		flex-wrap: wrap;
-		gap: .35rem 1.25rem;
-	}
-	.col-toggle-grid label {
-		font-size: .82rem;
+	.count-table th {
+		background: #f2f2f5;
+		font-weight: 600;
 		color: #444;
-		display: flex;
-		align-items: center;
-		gap: .35rem;
-		margin: 0;
+		font-size: .8rem;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		white-space: nowrap;
 	}
-	.stats-bar {
-		font-size: .82rem;
-		color: #666;
-		margin-bottom: .5rem;
+	.count-table td, .count-table th {
+		padding: .55rem .85rem;
+		border-bottom: 1px solid #eee;
+		text-align: right;
 	}
-	#data-table {
-		font-size: .85rem;
+	.count-table td:first-child, .count-table th:first-child {
+		text-align: left;
 	}
+	.count-table tbody tr:last-child td { border-bottom: none; }
+	.count-table tr.total-row td {
+		font-weight: 700;
+		background: #fafafa;
+		border-top: 2px solid #ddd;
+	}
+	.region-label { font-weight: 500; color: #333; }
 </style>
 {% endblock %}
 
 {% block content %}
+{% set region_names = {
+	'APAC': 'APAC', 'CANADA': 'Canada', 'EMEA': 'EMEA',
+	'LATAM': 'Latin America', 'USA': 'USA'
+} %}
+{% set region_order = ['APAC', 'CANADA', 'EMEA', 'LATAM', 'USA'] %}
+{% set band_cols = [
+	('enterprises_with_0_tech', '0 tech'),
+	('enterprises_with_1_50_tech', '1–50'),
+	('enterprises_with_51_200_tech', '51–200'),
+	('enterprises_with_201_1000_tech', '201–1000'),
+	('enterprises_with_over_1000_tech', 'Over 1000')
+] %}
+
 <div class="container-fluid">
 	<h4 class="mb-3">{{ title }}</h4>
+	<p class="page-intro">
+		Enterprises per region in 2022, broken down by how many technologies they have
+		installed. "At least 1" is the total minus the enterprises with no technology.
+	</p>
 
-	{% if description %}
-	<p class="page-intro">{{ description }}</p>
+	{% if error %}
+	<div class="alert alert-danger">{{ error }}</div>
+	{% else %}
+	{% set grand_total = rows|sum(attribute='total_enterprises') %}
+	{% set grand_zero = rows|sum(attribute='enterprises_with_0_tech') %}
+
+	<div class="count-section">
+		<h5>enterprises by installed technologies</h5>
+		<div class="table-responsive">
+			<table class="table count-table mb-0">
+				<thead>
+					<tr>
+						<th>Region</th>
+						<th>Total</th>
+						<th>At least 1</th>
+						{% for key, label in band_cols %}<th>{{ label }}</th>{% endfor %}
+						<th>% with ≥1</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for region in region_order %}
+						{% for row in rows if row['region'] == region %}
+						{% set total = row['total_enterprises']|int %}
+						{% set at_least_one = total - row['enterprises_with_0_tech']|int %}
+						<tr>
+							<td class="region-label">{{ region_names.get(region, region) }}</td>
+							<td>{{ "{:,}".format(total) }}</td>
+							<td>{{ "{:,}".format(at_least_one) }}</td>
+							{% for key, label in band_cols %}
+							<td>{{ "{:,}".format(row[key]|int) if row[key] is not none else "" }}</td>
+							{% endfor %}
+							<td>{{ "%.2f%%"|format(at_least_one / total * 100) if total else "" }}</td>
+						</tr>
+						{% endfor %}
+					{% endfor %}
+					<tr class="total-row">
+						<td class="region-label">Total</td>
+						<td>{{ "{:,}".format(grand_total|int) }}</td>
+						<td>{{ "{:,}".format((grand_total - grand_zero)|int) }}</td>
+						{% for key, label in band_cols %}
+						<td>{{ "{:,}".format(rows|sum(attribute=key)|int) }}</td>
+						{% endfor %}
+						<td>{{ "%.2f%%"|format((grand_total - grand_zero) / grand_total * 100) if grand_total else "" }}</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="count-section">
+		<h5>share of enterprises per technology band</h5>
+		<div class="table-responsive">
+			<table class="table count-table mb-0">
+				<thead>
+					<tr>
+						<th>Region</th>
+						{% for key, label in band_cols %}<th>{{ label }}</th>{% endfor %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for region in region_order %}
+						{% for row in rows if row['region'] == region %}
+						{% set total = row['total_enterprises']|int %}
+						<tr>
+							<td class="region-label">{{ region_names.get(region, region) }}</td>
+							{% for key, label in band_cols %}
+							<td>{{ "%.2f%%"|format(row[key]|int / total * 100) if total else "" }}</td>
+							{% endfor %}
+						</tr>
+						{% endfor %}
+					{% endfor %}
+					<tr class="total-row">
+						<td class="region-label">Total</td>
+						{% for key, label in band_cols %}
+						<td>{{ "%.2f%%"|format(rows|sum(attribute=key) / grand_total * 100) if grand_total else "" }}</td>
+						{% endfor %}
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
 	{% endif %}
-
-	<!-- Summary cards (recomputed on every filter change) -->
-	<div class="row g-3 mb-4" id="cards">
-		<div class="col-6 col-md-4 col-xl-2">
-			<div class="stat-card">
-				<div class="stat-label">Regions</div>
-				<div class="stat-value" id="cardRegions">0</div>
-				<div class="stat-sub" id="cardRegionsList">&nbsp;</div>
-			</div>
-		</div>
-		<div class="col-6 col-md-4 col-xl-2">
-			<div class="stat-card">
-				<div class="stat-label">Total enterprises</div>
-				<div class="stat-value" id="cardTotal">0</div>
-				<div class="stat-sub">All selected regions</div>
-			</div>
-		</div>
-		<div class="col-6 col-md-4 col-xl-2">
-			<div class="stat-card">
-				<div class="stat-label">With 0 technologies</div>
-				<div class="stat-value" id="cardZero">0</div>
-				<div class="stat-sub" id="cardZeroPct">&nbsp;</div>
-			</div>
-		</div>
-		<div class="col-6 col-md-4 col-xl-2">
-			<div class="stat-card">
-				<div class="stat-label">With ≥ 1 technology</div>
-				<div class="stat-value" id="cardWith">0</div>
-				<div class="stat-sub" id="cardWithPct">&nbsp;</div>
-			</div>
-		</div>
-		<div class="col-6 col-md-4 col-xl-2">
-			<div class="stat-card">
-				<div class="stat-label">With &gt; 200 technologies</div>
-				<div class="stat-value" id="cardLarge">0</div>
-				<div class="stat-sub" id="cardLargePct">&nbsp;</div>
-			</div>
-		</div>
-		<div class="col-6 col-md-4 col-xl-2">
-			<div class="stat-card">
-				<div class="stat-label">With &gt; 1000 technologies</div>
-				<div class="stat-value" id="cardTop">0</div>
-				<div class="stat-sub" id="cardTopRegion">&nbsp;</div>
-			</div>
-		</div>
-	</div>
-
-	<!-- Toolbar -->
-	<div class="toolbar">
-		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
-		<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download CSV</button>
-		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
-	</div>
-
-	<!-- Column show/hide panel -->
-	<div class="col-toggle-panel" id="colTogglePanel">
-		<div class="col-toggle-grid" id="colToggleGrid"></div>
-	</div>
-
-	<div class="stats-bar">
-		Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> records
-	</div>
-
-	<div id="data-table"></div>
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
-<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-	const apiUrl = "{{ url_for('general_info_api', slug=slug) }}";
-	const fileName = "regional_tech_distribution_2022.csv";
-	const LABELS = {
-		region: "Region",
-		year: "Year",
-		total_enterprises: "Total enterprises",
-		enterprises_with_0_tech: "0 tech",
-		enterprises_with_1_50_tech: "1–50 tech",
-		enterprises_with_51_200_tech: "51–200 tech",
-		enterprises_with_201_1000_tech: "201–1000 tech",
-		enterprises_with_over_1000_tech: "Over 1000 tech",
-	};
-	let allData = [];
-	let colMeta = [];
-
-	// Numeric header filter supporting <, >, <=, >=, = operators (e.g. ">100")
-	function numericFilter(headerValue, rowValue) {
-		if (headerValue === "" || headerValue === null || headerValue === undefined) return true;
-		if (rowValue === null || rowValue === undefined || rowValue === "") return false;
-		const m = String(headerValue).trim().match(/^(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)$/);
-		if (!m) return true;
-		const op = m[1] || "=";
-		const target = parseFloat(m[2]);
-		const val = parseFloat(rowValue);
-		if (isNaN(val)) return false;
-		switch (op) {
-			case "<": return val < target;
-			case ">": return val > target;
-			case "<=": return val <= target;
-			case ">=": return val >= target;
-			default: return val === target;
-		}
-	}
-
-	function buildColumns(meta) {
-		return meta.map(function (c) {
-			const title = LABELS[c.field] || c.field;
-			if (c.numeric && c.field !== "year") {
-				return {
-					title: title,
-					field: c.field,
-					sorter: "number",
-					hozAlign: "right",
-					headerFilter: "input",
-					headerFilterPlaceholder: "e.g. >100",
-					headerFilterFunc: numericFilter,
-					formatter: function (cell) {
-						const v = cell.getValue();
-						return (v === null || v === undefined || v === "") ? "" : Number(v).toLocaleString();
-					},
-				};
-			}
-			return {
-				title: title,
-				field: c.field,
-				headerFilter: "input",
-				headerFilterPlaceholder: "Search…",
-			};
-		});
-	}
-
-	const table = new Tabulator("#data-table", {
-		height: "45vh",
-		layout: "fitColumns",
-		placeholder: "Loading data…",
-		movableColumns: true,
-		headerSortTriState: true,
-	});
-
-	function num(v) {
-		const n = parseFloat(v);
-		return isNaN(n) ? 0 : n;
-	}
-
-	function fmt(n) {
-		return Math.round(n).toLocaleString();
-	}
-
-	function pct(part, whole) {
-		if (!whole) return "—";
-		return (part / whole * 100).toFixed(1) + "% of total";
-	}
-
-	function refreshStats() {
-		const rows = table.getData("active");
-		document.getElementById("rowCount").textContent = rows.length.toLocaleString();
-		document.getElementById("totalCount").textContent = allData.length.toLocaleString();
-
-		let total = 0, zero = 0, b1 = 0, b51 = 0, b201 = 0, b1000 = 0;
-		let topRegion = "", topValue = -1;
-		const regions = [];
-		rows.forEach(function (r) {
-			total += num(r.total_enterprises);
-			zero += num(r.enterprises_with_0_tech);
-			b1 += num(r.enterprises_with_1_50_tech);
-			b51 += num(r.enterprises_with_51_200_tech);
-			b201 += num(r.enterprises_with_201_1000_tech);
-			const over = num(r.enterprises_with_over_1000_tech);
-			b1000 += over;
-			if (over > topValue) { topValue = over; topRegion = r.region; }
-			if (r.region && regions.indexOf(r.region) === -1) regions.push(r.region);
-		});
-		const withTech = b1 + b51 + b201 + b1000;
-		const large = b201 + b1000;
-
-		document.getElementById("cardRegions").textContent = regions.length;
-		document.getElementById("cardRegionsList").textContent = regions.join(", ") || "—";
-		document.getElementById("cardTotal").textContent = fmt(total);
-		document.getElementById("cardZero").textContent = fmt(zero);
-		document.getElementById("cardZeroPct").textContent = pct(zero, total);
-		document.getElementById("cardWith").textContent = fmt(withTech);
-		document.getElementById("cardWithPct").textContent = pct(withTech, total);
-		document.getElementById("cardLarge").textContent = fmt(large);
-		document.getElementById("cardLargePct").textContent = pct(large, total);
-		document.getElementById("cardTop").textContent = fmt(b1000);
-		document.getElementById("cardTopRegion").textContent =
-			topValue > 0 ? "Top: " + topRegion : "—";
-	}
-
-	function buildColumnToggles() {
-		const grid = document.getElementById("colToggleGrid");
-		grid.innerHTML = "";
-		colMeta.forEach(function (c) {
-			const label = document.createElement("label");
-			const cb = document.createElement("input");
-			cb.type = "checkbox";
-			cb.checked = true;
-			cb.addEventListener("change", function () {
-				if (cb.checked) table.showColumn(c.field);
-				else table.hideColumn(c.field);
-			});
-			label.appendChild(cb);
-			label.appendChild(document.createTextNode(LABELS[c.field] || c.field));
-			grid.appendChild(label);
-		});
-	}
-
-	table.on("dataFiltered", function () { setTimeout(refreshStats, 0); });
-
-	fetch(apiUrl)
-		.then(function (res) { return res.json(); })
-		.then(function (data) {
-			if (data.error) {
-				document.getElementById("data-table").innerHTML =
-					'<div class="alert alert-danger">' + data.error + "</div>";
-				return;
-			}
-			colMeta = data.columns;
-			allData = data.rows;
-			table.setColumns(buildColumns(colMeta));
-			table.setData(allData).then(function () {
-				buildColumnToggles();
-				refreshStats();
-			});
-		})
-		.catch(function (err) {
-			document.getElementById("data-table").innerHTML =
-				'<div class="alert alert-danger">Failed to load data: ' + err + "</div>";
-		});
-
-	document.getElementById("btnToggleCols").addEventListener("click", function () {
-		document.getElementById("colTogglePanel").classList.toggle("open");
-	});
-
-	document.getElementById("btnDownload").addEventListener("click", function () {
-		table.download("csv", fileName);
-	});
-
-	document.getElementById("btnClearFilters").addEventListener("click", function () {
-		table.clearHeaderFilter();
-	});
-});
-</script>
 {% endblock %}
