@@ -84,6 +84,8 @@
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs') }}">Universe Installs</a></li>
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'product-categories' %}active{% endif %}" href="{{ url_for('general_info', slug='product-categories') }}">Security Products</a></li>
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'years-regions' %}active{% endif %}" href="{{ url_for('general_info', slug='years-regions') }}">Years &amp; Regions Available</a></li>
+								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'product-counts' %}active{% endif %}" href="{{ url_for('general_info', slug='product-counts') }}">Product Counts</a></li>
+								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'regional-tech-distribution' %}active{% endif %}" href="{{ url_for('general_info', slug='regional-tech-distribution') }}">Regional Tech Distribution 2022</a></li>
 							</ul>
 						</li>
 						<li class="nav-item dropdown">

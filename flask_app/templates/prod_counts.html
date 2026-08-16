@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — General Info{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro {
+		font-size: .9rem;
+		color: #555;
+		max-width: 900px;
+		margin-bottom: 1.5rem;
+	}
+	.count-section {
+		margin-bottom: 2.25rem;
+	}
+	.count-section h5 {
+		font-size: 1rem;
+		font-weight: 600;
+		color: #333;
+		margin-bottom: .75rem;
+		text-transform: capitalize;
+	}
+	.count-table {
+		background: #fff;
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		overflow: hidden;
+		font-size: .88rem;
+	}
+	.count-table th {
+		background: #f2f2f5;
+		font-weight: 600;
+		color: #444;
+		font-size: .8rem;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		white-space: nowrap;
+	}
+	.count-table td, .count-table th {
+		padding: .55rem .85rem;
+		border-bottom: 1px solid #eee;
+		text-align: right;
+	}
+	.count-table td:first-child, .count-table th:first-child {
+		text-align: left;
+	}
+	.count-table tbody tr:last-child td { border-bottom: none; }
+	.count-table tr.total-row td {
+		font-weight: 700;
+		background: #fafafa;
+		border-top: 2px solid #ddd;
+	}
+	.region-label { font-weight: 500; color: #333; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set region_names = {
+	'APAC': 'APAC', 'CANADA': 'Canada', 'EMEA': 'EMEA',
+	'LATIN_AMERICA': 'Latin America', 'USA': 'USA', 'WORLD': 'World'
+} %}
+{% set region_order = ['APAC', 'CANADA', 'EMEA', 'LATIN_AMERICA', 'USA', 'WORLD'] %}
+{% set metrics = [
+	('1. all products', 'All products'),
+	('2. oss products', 'Open-source products')
+] %}
+{% set count_cols = [
+	('n_enterprises', 'Enterprises'),
+	('zero_products', '0 products'),
+	('at_least_one', 'At least 1'),
+	('b_1_5', '1–5'),
+	('b_6_10', '6–10'),
+	('b_11_20', '11–20'),
+	('b_21_50', '21–50'),
+	('b_51_100', '51–100'),
+	('b_gt_100', 'Over 100')
+] %}
+
+<div class="container-fluid">
+	<h4 class="mb-3">{{ title }}</h4>
+	<p class="page-intro">
+		Number of enterprises by count of security products installed, broken down by region and
+		product-count band. Each metric shows how many enterprises have zero, at least one, or a
+		given number of products.
+	</p>
+
+	{% if error %}
+	<div class="alert alert-danger">{{ error }}</div>
+	{% else %}
+		{% for metric_key, metric_label in metrics %}
+		<div class="count-section">
+			<h5>{{ metric_label }}</h5>
+			<div class="table-responsive">
+				<table class="table count-table mb-0">
+					<thead>
+						<tr>
+							<th>Region</th>
+							{% for key, label in count_cols %}<th>{{ label }}</th>{% endfor %}
+							<th>% with ≥1</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for region in region_order %}
+							{% for row in rows if row['metric'] == metric_key and row['region'] == region %}
+							<tr class="{{ 'total-row' if region == 'WORLD' else '' }}">
+								<td class="region-label">{{ region_names.get(region, region) }}</td>
+								{% for key, label in count_cols %}
+								<td>{{ "{:,}".format(row[key]|int) if row[key] is not none else "" }}</td>
+								{% endfor %}
+								<td>{{ "%.2f%%"|format(row['share_at_least_one_pct']|float) if row['share_at_least_one_pct'] is not none else "" }}</td>
+							</tr>
+							{% endfor %}
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</div>
+		{% endfor %}
+	{% endif %}
+</div>
+{% endblock %}

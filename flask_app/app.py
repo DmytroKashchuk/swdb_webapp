@@ -1149,6 +1149,20 @@ GENERAL_INFO_DATASETS = {
 		"title": "Years & Regions Available",
 		"template": "years_regions.html",
 	},
+	"product-counts": {
+		"file": "prod_counts.csv",
+		"title": "Product Counts",
+		"template": "prod_counts.html",
+	},
+	"regional-tech-distribution": {
+		"file": "regional_tech_distribution_2022.csv",
+		"title": "Regional Tech Distribution 2022",
+		"description": (
+			"Enterprises per region in 2022, broken down by how many technologies "
+			"they have installed (0, 1–50, 51–200, 201–1000, over 1000)."
+		),
+		"template": "regional_tech_distribution.html",
+	},
 }
 
 
