@@ -1275,6 +1275,103 @@ def general_info_api(slug):
 	return jsonify({"columns": columns, "rows": rows})
 
 
+# ---------------------------------------------------------------------------
+# Database tables catalog
+# ---------------------------------------------------------------------------
+
+# Static rule takes precedence over the /general-info/<slug> converter rule.
+@app.route("/general-info/db-tables")
+def db_tables():
+	"""Page listing every table in the database with its catalog information."""
+	return render_template("db_tables.html", title="Database Tables")
+
+
+@app.route("/api/db-tables")
+def db_tables_api():
+	"""JSON API: catalog information for every table in the database."""
+
+	sql = """
+		SELECT
+			n.nspname                                   AS schema,
+			c.relname                                   AS table_name,
+			CASE c.relkind
+				WHEN 'r' THEN 'table'
+				WHEN 'p' THEN 'partitioned table'
+				WHEN 'v' THEN 'view'
+				WHEN 'm' THEN 'materialized view'
+				WHEN 'f' THEN 'foreign table'
+			END                                         AS object_type,
+			pg_get_userbyid(c.relowner)                 AS owner,
+			c.reltuples::bigint                         AS estimated_rows,
+			(SELECT count(*)
+			   FROM pg_attribute a
+			  WHERE a.attrelid = c.oid
+			    AND a.attnum > 0
+			    AND NOT a.attisdropped)                 AS columns,
+			(SELECT count(*) FROM pg_index i WHERE i.indrelid = c.oid) AS indexes,
+			pg_total_relation_size(c.oid)               AS total_bytes,
+			pg_relation_size(c.oid)                     AS data_bytes,
+			pg_indexes_size(c.oid)                      AS index_bytes,
+			pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size,
+			obj_description(c.oid, 'pg_class')          AS description
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+		  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+		  AND n.nspname NOT LIKE 'pg_toast%'
+		ORDER BY n.nspname, c.relname;
+	"""
+
+	try:
+		conn = get_db_connection()
+		with conn:
+			with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+				cur.execute(sql)
+				rows = [dict(r) for r in cur.fetchall()]
+		conn.close()
+	except Exception as exc:
+		return jsonify({"error": str(exc)}), 500
+
+	return jsonify({"rows": rows})
+
+
+@app.route("/api/db-tables/columns")
+def db_table_columns_api():
+	"""JSON API: column details for a single table."""
+
+	schema = request.args.get("schema", "").strip()
+	table = request.args.get("table", "").strip()
+	if not schema or not table:
+		return jsonify({"error": "Both 'schema' and 'table' are required."}), 400
+
+	sql = """
+		SELECT
+			ordinal_position   AS position,
+			column_name        AS column,
+			data_type          AS type,
+			character_maximum_length AS max_length,
+			numeric_precision,
+			numeric_scale,
+			is_nullable        AS nullable,
+			column_default     AS default_value
+		FROM information_schema.columns
+		WHERE table_schema = %s AND table_name = %s
+		ORDER BY ordinal_position;
+	"""
+
+	try:
+		conn = get_db_connection()
+		with conn:
+			with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+				cur.execute(sql, (schema, table))
+				rows = [dict(r) for r in cur.fetchall()]
+		conn.close()
+	except Exception as exc:
+		return jsonify({"error": str(exc)}), 500
+
+	return jsonify({"rows": rows})
+
+
 if __name__ == "__main__":
 	# ip to run the app: 127.0.0.1 and 10.20.5.20 on port 80 both
 	app.run(host="0.0.0.0", port=8888)

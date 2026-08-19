@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — General Info{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro {
+		font-size: .9rem;
+		color: #555;
+		max-width: 900px;
+		margin-bottom: 1.25rem;
+	}
+	.stat-card {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		height: 100%;
+	}
+	.stat-card .stat-label {
+		font-size: .72rem;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		color: #777;
+	}
+	.stat-card .stat-value {
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: #333;
+	}
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .6rem;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+	.toolbar .btn-sm {
+		font-size: .8rem;
+		padding: .4rem .75rem;
+	}
+	.col-toggle-panel {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		margin-bottom: 1rem;
+		display: none;
+	}
+	.col-toggle-panel.open {
+		display: block;
+	}
+	.col-toggle-grid {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .35rem 1.25rem;
+	}
+	.col-toggle-grid label {
+		font-size: .82rem;
+		color: #444;
+		display: flex;
+		align-items: center;
+		gap: .35rem;
+		margin: 0;
+	}
+	.stats-bar {
+		font-size: .82rem;
+		color: #666;
+		margin-bottom: .5rem;
+	}
+	#data-table {
+		font-size: .85rem;
+	}
+	#columns-table {
+		font-size: .85rem;
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-3">{{ title }}</h4>
+	<p class="page-intro">
+		Every table in the <code>swdb</code> database with its catalog information: schema,
+		object type, owner, estimated row count, number of columns and indexes, and storage
+		size. Select a row to inspect that table's columns.
+	</p>
+
+	<div class="row g-3 mb-3" id="statCards">
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Tables</div>
+				<div class="stat-value" id="statTables">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Estimated rows</div>
+				<div class="stat-value" id="statRows">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Total size</div>
+				<div class="stat-value" id="statSize">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Columns</div>
+				<div class="stat-value" id="statColumns">0</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download CSV</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+	</div>
+
+	<div class="col-toggle-panel" id="colTogglePanel">
+		<div class="col-toggle-grid" id="colToggleGrid"></div>
+	</div>
+
+	<div class="stats-bar">
+		Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> tables
+	</div>
+
+	<div id="data-table"></div>
+
+	<div class="mt-4" id="columnsSection" style="display:none;">
+		<h6 class="mb-2">Columns of <span id="selectedTable"></span></h6>
+		<div class="toolbar">
+			<button class="btn btn-outline-secondary btn-sm" id="btnDownloadColumns">Download CSV</button>
+		</div>
+		<div id="columns-table"></div>
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const apiUrl = "{{ url_for('db_tables_api') }}";
+	const columnsUrl = "{{ url_for('db_table_columns_api') }}";
+	let allData = [];
+
+	// Numeric header filter supporting <, >, <=, >=, = operators (e.g. ">100")
+	function numericFilter(headerValue, rowValue) {
+		if (headerValue === "" || headerValue === null || headerValue === undefined) return true;
+		if (rowValue === null || rowValue === undefined || rowValue === "") return false;
+		const m = String(headerValue).trim().match(/^(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)$/);
+		if (!m) return true;
+		const op = m[1] || "=";
+		const target = parseFloat(m[2]);
+		const val = parseFloat(rowValue);
+		if (isNaN(val)) return false;
+		switch (op) {
+			case "<": return val < target;
+			case ">": return val > target;
+			case "<=": return val <= target;
+			case ">=": return val >= target;
+			default: return val === target;
+		}
+	}
+
+	function numFormatter(cell) {
+		const v = cell.getValue();
+		return (v === null || v === undefined || v === "") ? "" : Number(v).toLocaleString();
+	}
+
+	function humanBytes(bytes) {
+		if (bytes === null || bytes === undefined || bytes === "") return "";
+		const units = ["B", "kB", "MB", "GB", "TB"];
+		let val = Number(bytes), i = 0;
+		while (val >= 1024 && i < units.length - 1) { val /= 1024; i++; }
+		return (i === 0 ? val : val.toFixed(1)) + " " + units[i];
+	}
+
+	const textCol = function (title, field, width) {
+		return {
+			title: title, field: field, width: width,
+			headerFilter: "input", headerFilterPlaceholder: "Search…",
+		};
+	};
+	const numCol = function (title, field) {
+		return {
+			title: title, field: field, sorter: "number", hozAlign: "right",
+			headerFilter: "input", headerFilterPlaceholder: "e.g. >100",
+			headerFilterFunc: numericFilter, formatter: numFormatter,
+		};
+	};
+	const byteCol = function (title, field) {
+		const col = numCol(title, field);
+		col.formatter = function (cell) { return humanBytes(cell.getValue()); };
+		return col;
+	};
+
+	const columns = [
+		textCol("Schema", "schema"),
+		textCol("Table", "table_name", 280),
+		textCol("Type", "object_type"),
+		textCol("Owner", "owner"),
+		numCol("Estimated rows", "estimated_rows"),
+		numCol("Columns", "columns"),
+		numCol("Indexes", "indexes"),
+		byteCol("Total size", "total_bytes"),
+		byteCol("Data size", "data_bytes"),
+		byteCol("Index size", "index_bytes"),
+		textCol("Description", "description"),
+	];
+
+	const table = new Tabulator("#data-table", {
+		height: "58vh",
+		layout: "fitDataFill",
+		placeholder: "Loading tables…",
+		pagination: true,
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		movableColumns: true,
+		headerSortTriState: true,
+		selectable: 1,
+		columns: columns,
+	});
+
+	function refreshStats() {
+		const rows = table.getRows("active").map(function (r) { return r.getData(); });
+		document.getElementById("rowCount").textContent = rows.length.toLocaleString();
+		document.getElementById("totalCount").textContent = allData.length.toLocaleString();
+		document.getElementById("statTables").textContent = rows.length.toLocaleString();
+
+		let totalRows = 0, totalBytes = 0, totalCols = 0;
+		rows.forEach(function (r) {
+			totalRows += Number(r.estimated_rows) || 0;
+			totalBytes += Number(r.total_bytes) || 0;
+			totalCols += Number(r.columns) || 0;
+		});
+		document.getElementById("statRows").textContent = totalRows.toLocaleString();
+		document.getElementById("statSize").textContent = humanBytes(totalBytes);
+		document.getElementById("statColumns").textContent = totalCols.toLocaleString();
+	}
+
+	function buildColumnToggles() {
+		const grid = document.getElementById("colToggleGrid");
+		grid.innerHTML = "";
+		columns.forEach(function (c) {
+			const label = document.createElement("label");
+			const cb = document.createElement("input");
+			cb.type = "checkbox";
+			cb.checked = true;
+			cb.addEventListener("change", function () {
+				if (cb.checked) table.showColumn(c.field);
+				else table.hideColumn(c.field);
+			});
+			label.appendChild(cb);
+			label.appendChild(document.createTextNode(c.title));
+			grid.appendChild(label);
+		});
+	}
+
+	table.on("dataFiltered", function () { setTimeout(refreshStats, 0); });
+
+	const colTable = new Tabulator("#columns-table", {
+		height: "40vh",
+		layout: "fitDataFill",
+		placeholder: "Select a table above",
+		movableColumns: true,
+		headerSortTriState: true,
+		ajaxResponse: function (url, params, response) { return response.rows || []; },
+		columns: [
+			numCol("#", "position"),
+			textCol("Column", "column", 240),
+			textCol("Type", "type"),
+			numCol("Max length", "max_length"),
+			numCol("Precision", "numeric_precision"),
+			numCol("Scale", "numeric_scale"),
+			textCol("Nullable", "nullable"),
+			textCol("Default", "default_value"),
+		],
+	});
+
+	let selectedName = "";
+
+	table.on("rowSelected", function (row) {
+		const d = row.getData();
+		selectedName = d.schema + "." + d.table_name;
+		document.getElementById("selectedTable").textContent = selectedName;
+		document.getElementById("columnsSection").style.display = "block";
+		colTable.setData(columnsUrl, { schema: d.schema, table: d.table_name }, "GET");
+	});
+
+	colTable.on("dataLoadError", function () {
+		colTable.clearData();
+	});
+
+	fetch(apiUrl)
+		.then(function (res) { return res.json(); })
+		.then(function (data) {
+			if (data.error) {
+				document.getElementById("data-table").innerHTML =
+					'<div class="alert alert-danger">' + data.error + "</div>";
+				return;
+			}
+			allData = data.rows;
+			table.setData(allData).then(function () {
+				buildColumnToggles();
+				refreshStats();
+			});
+		})
+		.catch(function (err) {
+			document.getElementById("data-table").innerHTML =
+				'<div class="alert alert-danger">Failed to load data: ' + err + "</div>";
+		});
+
+	document.getElementById("btnToggleCols").addEventListener("click", function () {
+		document.getElementById("colTogglePanel").classList.toggle("open");
+	});
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		table.download("csv", "db_tables.csv");
+	});
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		table.clearFilter(true);
+		table.clearHeaderFilter();
+	});
+	document.getElementById("btnDownloadColumns").addEventListener("click", function () {
+		colTable.download("csv", (selectedName || "columns") + ".csv");
+	});
+});
+</script>
+{% endblock %}

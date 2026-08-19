@@ -78,8 +78,10 @@
 							<a class="nav-link {% if request.endpoint == 'swdb_schema' %}active{% endif %}" href="{{ url_for('swdb_schema') }}">SWDB Schema</a>
 						</li>
 						<li class="nav-item dropdown">
-							<a class="nav-link dropdown-toggle {% if request.endpoint == 'general_info' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">General Info</a>
+							<a class="nav-link dropdown-toggle {% if request.endpoint in ('general_info', 'db_tables') %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">General Info</a>
 							<ul class="dropdown-menu">
+								<li><a class="dropdown-item {% if request.endpoint == 'db_tables' %}active{% endif %}" href="{{ url_for('db_tables') }}">Database Tables</a></li>
+								<li><hr class="dropdown-divider"></li>
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'enterprises-counts' %}active{% endif %}" href="{{ url_for('general_info', slug='enterprises-counts') }}">Enterprises Counts</a></li>
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs') }}">Universe Installs</a></li>
 								<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'product-categories' %}active{% endif %}" href="{{ url_for('general_info', slug='product-categories') }}">Security Products</a></li>
