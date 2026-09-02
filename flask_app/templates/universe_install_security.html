@@ -21,6 +21,18 @@
 		font-size: .8rem;
 		padding: .4rem .75rem;
 	}
+	.security-toggle {
+		display: flex;
+		align-items: center;
+		gap: .4rem;
+		font-size: .82rem;
+		color: #444;
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .35rem .75rem;
+		margin: 0;
+	}
 	.col-toggle-panel {
 		border: 1px solid #e0e0e0;
 		border-radius: 6px;
@@ -82,7 +94,6 @@
 	<p class="page-intro">{{ description }}</p>
 	{% endif %}
 
-	{% if cards %}
 	<div class="row g-3 mb-3">
 		{% for card in cards %}
 		<div class="col-6 col-md-3">
@@ -92,17 +103,34 @@
 			</div>
 		</div>
 		{% endfor %}
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Security Products</div>
+				<div class="stat-value" id="cardSecurity">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Open Source Products</div>
+				<div class="stat-value" id="cardOpenSource">0</div>
+			</div>
+		</div>
 	</div>
-	{% endif %}
 
-	<!-- Toolbar -->
 	<div class="toolbar">
+		<label class="security-toggle">
+			<input type="checkbox" id="chkSecurityOnly">
+			Security products only
+		</label>
+		<label class="security-toggle">
+			<input type="checkbox" id="chkOpenSourceOnly">
+			Open source only
+		</label>
 		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
 		<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download CSV</button>
 		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
 	</div>
 
-	<!-- Column show/hide panel -->
 	<div class="col-toggle-panel" id="colTogglePanel">
 		<div class="col-toggle-grid" id="colToggleGrid"></div>
 	</div>
@@ -122,15 +150,25 @@ document.addEventListener("DOMContentLoaded", function () {
 	const apiUrl = "{{ url_for('general_info_api', slug=slug) }}";
 	const fileName = "{{ slug }}.csv";
 	const cards = {{ (cards or [])|tojson }};
+	const SECURITY_FIELD = "security_product";
+	const OSS_FIELD = "is_open_source";
+	const LINK_FIELD = "githublink";
 	let allData = [];
 	let colMeta = [];
+
+	function isTrue(row, field) {
+		return String(row[field]).trim().toLowerCase() === "true";
+	}
+
+	function isSecurity(row) { return isTrue(row, SECURITY_FIELD); }
+	function isOpenSource(row) { return isTrue(row, OSS_FIELD); }
 
 	// Numeric header filter supporting <, >, <=, >=, = operators (e.g. ">100")
 	function numericFilter(headerValue, rowValue) {
 		if (headerValue === "" || headerValue === null || headerValue === undefined) return true;
 		if (rowValue === null || rowValue === undefined || rowValue === "") return false;
 		const m = String(headerValue).trim().match(/^(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)$/);
-		if (!m) return true; // invalid input -> don't filter out
+		if (!m) return true;
 		const op = m[1] || "=";
 		const target = parseFloat(m[2]);
 		const val = parseFloat(rowValue);
@@ -160,6 +198,24 @@ document.addEventListener("DOMContentLoaded", function () {
 					},
 				};
 			}
+			if (c.field === SECURITY_FIELD || c.field === OSS_FIELD) {
+				return {
+					title: c.field,
+					field: c.field,
+					headerFilter: "list",
+					headerFilterParams: { values: ["", "true", "false"], clearable: true },
+				};
+			}
+			if (c.field === LINK_FIELD) {
+				return {
+					title: c.field,
+					field: c.field,
+					formatter: "link",
+					formatterParams: { target: "_blank" },
+					headerFilter: "input",
+					headerFilterPlaceholder: "Search…",
+				};
+			}
 			return {
 				title: c.field,
 				field: c.field,
@@ -181,15 +237,14 @@ document.addEventListener("DOMContentLoaded", function () {
 	});
 
 	function refreshStats() {
-		const active = table.getRows("active").length;
-		document.getElementById("rowCount").textContent = active.toLocaleString();
-		document.getElementById("totalCount").textContent = allData.length.toLocaleString();
-		refreshCards();
-	}
-
-	function refreshCards() {
-		if (!cards.length) return;
 		const rows = table.getRows("active").map(function (r) { return r.getData(); });
+		document.getElementById("rowCount").textContent = rows.length.toLocaleString();
+		document.getElementById("totalCount").textContent = allData.length.toLocaleString();
+		document.getElementById("cardSecurity").textContent =
+			rows.filter(isSecurity).length.toLocaleString();
+		document.getElementById("cardOpenSource").textContent =
+			rows.filter(isOpenSource).length.toLocaleString();
+
 		cards.forEach(function (card, i) {
 			let value;
 			if (card.agg === "count") {
@@ -227,6 +282,18 @@ document.addEventListener("DOMContentLoaded", function () {
 		});
 	}
 
+	function applyToggleFilters() {
+		const wantSecurity = document.getElementById("chkSecurityOnly").checked;
+		const wantOpenSource = document.getElementById("chkOpenSourceOnly").checked;
+		if (!wantSecurity && !wantOpenSource) {
+			table.clearFilter(false);
+			return;
+		}
+		table.setFilter(function (row) {
+			return (!wantSecurity || isSecurity(row)) && (!wantOpenSource || isOpenSource(row));
+		});
+	}
+
 	table.on("dataFiltered", function () { setTimeout(refreshStats, 0); });
 
 	fetch(apiUrl)
@@ -250,6 +317,8 @@ document.addEventListener("DOMContentLoaded", function () {
 				'<div class="alert alert-danger">Failed to load data: ' + err + "</div>";
 		});
 
+	document.getElementById("chkSecurityOnly").addEventListener("change", applyToggleFilters);
+	document.getElementById("chkOpenSourceOnly").addEventListener("change", applyToggleFilters);
 	document.getElementById("btnToggleCols").addEventListener("click", function () {
 		document.getElementById("colTogglePanel").classList.toggle("open");
 	});
@@ -257,6 +326,8 @@ document.addEventListener("DOMContentLoaded", function () {
 		table.download("csv", fileName);
 	});
 	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		document.getElementById("chkSecurityOnly").checked = false;
+		document.getElementById("chkOpenSourceOnly").checked = false;
 		table.clearFilter(true);
 		table.clearHeaderFilter();
 	});

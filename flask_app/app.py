@@ -1134,6 +1134,52 @@ GENERAL_INFO_DATASETS = {
 		"template": "general_info.html",
 		"dedupe": True,
 	},
+	"universe-installs-2016": {
+		"file": "universe_install_2016.csv",
+		"title": "Universe Installs 2016",
+		"description": (
+			"Installed base for 2016: every vendor product with its total sites, "
+			"US sites, total enterprises and US enterprises."
+		),
+		"template": "general_info.html",
+		"dedupe": True,
+		"text_cols": ["ProductId"],
+		"cards": [
+			{"label": "Products", "agg": "count"},
+			{"label": "Vendors", "field": "VendorName", "agg": "distinct"},
+			{"label": "Total Sites", "field": "Total Sites", "agg": "sum"},
+			{"label": "Total Enterprises", "field": "Total Enterprises", "agg": "sum"},
+		],
+	},
+	"universe-installs-2020": {
+		"file": "universe_installs_2020.csv",
+		"title": "Universe Installs 2020",
+		"description": (
+			"Installed base for 2020: every vendor product with its total sites, "
+			"US sites, total enterprises and US enterprises."
+		),
+		"template": "general_info.html",
+		"dedupe": True,
+		"text_cols": ["ProductId"],
+		"cards": [
+			{"label": "Products", "agg": "count"},
+			{"label": "Vendors", "field": "VendorName", "agg": "distinct"},
+			{"label": "Total Sites", "field": "Total Sites", "agg": "sum"},
+			{"label": "Total Enterprises", "field": "Total Enterprises", "agg": "sum"},
+		],
+	},
+	"universe-installs-security": {
+		"file": "universe_installs_security.csv",
+		"title": "Universe Installs Enhanced",
+		"template": "universe_install_security.html",
+		"client_side": True,
+		"dedupe": True,
+		"text_cols": ["productid", "tabkeynewid"],
+		"cards": [
+			{"label": "Products", "agg": "count"},
+			{"label": "Vendors", "field": "vendorname", "agg": "distinct"},
+		],
+	},
 	"product-categories": {
 		"file": "prodcatct-annotated-complete.csv",
 		"title": "Security Products",
@@ -1166,7 +1212,7 @@ GENERAL_INFO_DATASETS = {
 }
 
 
-def _load_general_info_df(filename, dedupe=False):
+def _load_general_info_df(filename, dedupe=False, text_cols=None):
 	"""Load a general-info CSV with pandas and normalise it.
 
 	- Reads everything as strings first (so IDs / codes are preserved).
@@ -1174,8 +1220,10 @@ def _load_general_info_df(filename, dedupe=False):
 	- Optionally removes duplicate rows.
 	- Detects numeric columns (including values formatted like "696,761")
 	  and converts them, returning the list of numeric column names.
+	- Columns listed in ``text_cols`` are never converted (keeps leading zeros).
 	"""
 
+	text_cols = set(text_cols or [])
 	csv_path = Path(__file__).parent / "data" / "swdb_general_info" / filename
 	df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
 
@@ -1201,6 +1249,8 @@ def _load_general_info_df(filename, dedupe=False):
 
 	numeric_cols = []
 	for col in df.columns:
+		if col in text_cols:
+			continue
 		stripped = df[col].astype(str).str.strip()
 		non_empty = stripped[stripped != ""]
 		if non_empty.empty:
@@ -1228,14 +1278,17 @@ def general_info(slug):
 		"slug": slug,
 		"title": dataset["title"],
 		"description": dataset.get("description"),
+		"cards": dataset.get("cards"),
 		"datasets": GENERAL_INFO_DATASETS,
 	}
 
 	# Pretty, server-rendered presentation pages get their data up-front.
-	if template != "general_info.html":
+	if template != "general_info.html" and not dataset.get("client_side"):
 		try:
 			df, numeric_cols = _load_general_info_df(
-				dataset["file"], dedupe=dataset.get("dedupe", False)
+				dataset["file"],
+				dedupe=dataset.get("dedupe", False),
+				text_cols=dataset.get("text_cols"),
 			)
 			df = df.where(pd.notnull(df), None)
 			context["columns"] = [
@@ -1257,7 +1310,9 @@ def general_info_api(slug):
 
 	try:
 		df, numeric_cols = _load_general_info_df(
-			dataset["file"], dedupe=dataset.get("dedupe", False)
+			dataset["file"],
+			dedupe=dataset.get("dedupe", False),
+			text_cols=dataset.get("text_cols"),
 		)
 	except FileNotFoundError:
 		return jsonify({"error": "CSV file not found."}), 404
