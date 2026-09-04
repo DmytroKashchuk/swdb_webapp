@@ -1,0 +1,694 @@
+{% extends "base.html" %}
+
+{% block title %}NIST Categories — {{ country_label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro {
+		font-size: .9rem;
+		color: #555;
+		max-width: 900px;
+		margin-bottom: 1.25rem;
+	}
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .6rem;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+	.toolbar .btn-sm {
+		font-size: .8rem;
+		padding: .4rem .75rem;
+	}
+	.col-toggle-panel {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		margin-bottom: 1rem;
+		display: none;
+	}
+	.col-toggle-panel.open {
+		display: block;
+	}
+	.col-toggle-grid {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .35rem 1.25rem;
+	}
+	.col-toggle-grid label {
+		font-size: .82rem;
+		color: #444;
+		display: flex;
+		align-items: center;
+		gap: .35rem;
+		margin: 0;
+	}
+	.stats-bar {
+		font-size: .82rem;
+		color: #666;
+		margin-bottom: .5rem;
+	}
+	.stat-card {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		height: 100%;
+	}
+	.stat-card .stat-label {
+		font-size: .72rem;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		color: #777;
+	}
+	.stat-card .stat-value {
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: #333;
+	}
+	.nist-panel {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		margin-bottom: 1.25rem;
+	}
+	.nist-panel h6 {
+		font-size: .85rem;
+		margin-bottom: .5rem;
+	}
+	.nist-panel .table {
+		font-size: .82rem;
+		margin-bottom: .25rem;
+	}
+	.nist-panel .table th {
+		font-weight: 600;
+		color: #555;
+		white-space: nowrap;
+	}
+	.nist-panel .table td.num,
+	.nist-panel .table th.num {
+		text-align: right;
+	}
+	.nist-panel .table tr.section-start td,
+	.nist-panel .table tr.section-start th {
+		border-top: 2px solid #ccc;
+	}
+	.nist-panel .note {
+		font-size: .72rem;
+		color: #888;
+	}
+	#data-table,
+	#tech-table,
+	#sites-table {
+		font-size: .85rem;
+	}
+	.cell-link {
+		color: #2c5d8f;
+		text-decoration: underline;
+		cursor: pointer;
+	}
+	.phase-badge {
+		display: inline-block;
+		border: 1px solid #d5d5d5;
+		border-radius: 4px;
+		background: #f4f4f6;
+		color: #444;
+		font-size: .75rem;
+		padding: .1rem .45rem;
+		margin: 0 .3rem .3rem 0;
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-3">NIST Categories — {{ country_label }} 2022</h4>
+
+	<div class="alert alert-secondary py-2 d-none" id="buildBanner"></div>
+
+	<div class="row g-3 mb-3">
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Accounts</div>
+				<div class="stat-value" id="cardAccounts">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Avg Security Controls</div>
+				<div class="stat-value" id="cardAvgControls">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Avg NIST Categories</div>
+				<div class="stat-value" id="cardAvgPhases">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Total Sites</div>
+				<div class="stat-value" id="cardSites">0</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="nist-panel">
+		<h6>NIST category coverage by firm size (% of filtered accounts)</h6>
+		<div class="table-responsive">
+			<table class="table table-sm table-borderless" id="nistTable">
+				<thead>
+					<tr>
+						<th>NIST Category</th>
+						<th class="num">Overall (%)</th>
+						<th class="num">Firm Size (%) - &gt;500 Employees</th>
+						<th class="num">Firm Size (%) - &lt;500 Employees ≥10</th>
+						<th class="num">Firm Size (%) - &lt;10 Employees</th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+		</div>
+		<div class="note">
+			Accounts: overall <span id="nistNAll">0</span> · &gt;500 <span id="nistNGt500">0</span> ·
+			10–500 <span id="nistNMid">0</span> · &lt;10 <span id="nistNLt10">0</span> ·
+			unknown employees <span id="nistNUnknown">0</span> (counted in Overall only).
+		</div>
+	</div>
+
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download CSV</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnDownloadNist">Download NIST Table</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnRebuild" title="Re-read the database (use after the nist_controls table changes)">Rebuild data</button>
+	</div>
+
+	<div class="col-toggle-panel" id="colTogglePanel">
+		<div class="col-toggle-grid" id="colToggleGrid"></div>
+	</div>
+
+	<div class="stats-bar">
+		Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> accounts
+		<span id="builtAt" class="text-muted"></span>
+	</div>
+
+	<div id="data-table"></div>
+</div>
+
+<!-- Account technologies modal -->
+<div class="modal fade" id="techModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-xl modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="techModalTitle">Technologies</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div id="techError" class="alert alert-danger d-none"></div>
+				<div class="row g-3 mb-3">
+					<div class="col-4">
+						<div class="stat-card">
+							<div class="stat-label">Technologies</div>
+							<div class="stat-value" id="techCardTotal">0</div>
+						</div>
+					</div>
+					<div class="col-4">
+						<div class="stat-card">
+							<div class="stat-label">Security Products</div>
+							<div class="stat-value" id="techCardSecurity">0</div>
+						</div>
+					</div>
+					<div class="col-4">
+						<div class="stat-card">
+							<div class="stat-label">NIST Categories</div>
+							<div class="stat-value" id="techCardPhases">0</div>
+						</div>
+					</div>
+				</div>
+				<div id="techPhaseBadges" class="mb-2"></div>
+				<div class="toolbar">
+					<button class="btn btn-outline-secondary btn-sm" id="btnTechSecurityOnly">Security products only</button>
+					<button class="btn btn-outline-secondary btn-sm" id="btnTechDownload">Download CSV</button>
+					<button class="btn btn-outline-secondary btn-sm" id="btnTechClearFilters">Clear Filters</button>
+				</div>
+				<div id="tech-table"></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Account sites modal -->
+<div class="modal fade" id="sitesModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-xl modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="sitesModalTitle">Sites</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div id="sitesError" class="alert alert-danger d-none"></div>
+				<div class="stats-bar"><strong id="sitesCount">0</strong> sites</div>
+				<div class="toolbar">
+					<button class="btn btn-outline-secondary btn-sm" id="btnSitesDownload">Download CSV</button>
+					<button class="btn btn-outline-secondary btn-sm" id="btnSitesClearFilters">Clear Filters</button>
+				</div>
+				<div id="sites-table"></div>
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const dataUrl = "{{ url_for('nist_categories_data_api', country=country) }}";
+	const downloadUrl = "{{ url_for('nist_categories_download', country=country) }}";
+	const techApiUrl = "{{ url_for('nist_account_technologies_api', country=country) }}";
+	const sitesApiUrl = "{{ url_for('nist_account_sites_api', country=country) }}";
+
+	let techTable = null;
+	let sitesTable = null;
+	let techSecurityOnly = false;
+	let nistRows = [];
+	let forceRefresh = false;
+
+	function numFormatter(cell) {
+		const v = cell.getValue();
+		return (v === null || v === undefined || v === "") ? "" : Number(v).toLocaleString();
+	}
+
+	function textCol(field, grow) {
+		return { title: field, field: field, headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: grow || 1 };
+	}
+	function numCol(field, placeholder) {
+		return {
+			title: field, field: field, sorter: "number", hozAlign: "right",
+			headerFilter: "input", headerFilterPlaceholder: placeholder || "e.g. >5",
+			formatter: numFormatter, width: 120,
+		};
+	}
+	function boolCol(field) {
+		return {
+			title: field, field: field, formatter: "tickCross", hozAlign: "center", width: 120,
+			headerFilter: "list",
+			headerFilterParams: { values: { "": "All", "true": "Yes", "false": "No" }, clearable: true },
+		};
+	}
+
+	const COLUMN_META = {{ column_meta|tojson }};
+	const NUM_PLACEHOLDERS = {
+		n_nist_phases: "e.g. >=3", account_employees: "e.g. >500",
+		account_revenue_usd: "e.g. >1000000", num_sites: "e.g. >1",
+	};
+	const TEXT_GROW = { account_name: 3, account_trade_name: 2, account_url: 2 };
+
+	const columns = COLUMN_META.map(function (m) {
+		if (m.field === "account_name") {
+			return Object.assign(textCol(m.field, 3), {
+				formatter: function (cell) {
+					const span = document.createElement("span");
+					span.className = "cell-link";
+					span.textContent = cell.getValue() || "(no name)";
+					return span;
+				},
+				cellClick: function (e, cell) { openTechnologies(cell.getRow().getData()); },
+			});
+		}
+		if (m.field === "num_sites") {
+			return Object.assign(numCol(m.field, NUM_PLACEHOLDERS[m.field]), {
+				formatter: function (cell) {
+					const span = document.createElement("span");
+					span.className = "cell-link";
+					span.textContent = Number(cell.getValue() || 0).toLocaleString();
+					return span;
+				},
+				cellClick: function (e, cell) { openSites(cell.getRow().getData()); },
+			});
+		}
+		if (m.type === "num") return numCol(m.field, NUM_PLACEHOLDERS[m.field]);
+		if (m.type === "bool") return boolCol(m.field);
+		return textCol(m.field, TEXT_GROW[m.field]);
+	});
+
+	function buildQuery(params) {
+		const q = new URLSearchParams();
+		if (params.page) q.set("page", params.page);
+		if (params.size) q.set("size", params.size);
+		(params.sort || []).slice(0, 1).forEach(function (s) {
+			q.set("sort", s.field);
+			q.set("dir", s.dir);
+		});
+		(params.filter || []).forEach(function (f) {
+			if (f.value !== "" && f.value !== null && f.value !== undefined) q.set("f_" + f.field, f.value);
+		});
+		if (forceRefresh) { q.set("refresh", "1"); forceRefresh = false; }
+		return q.toString();
+	}
+
+	function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+	function showBanner(text) {
+		const b = document.getElementById("buildBanner");
+		b.textContent = text;
+		b.classList.remove("d-none");
+	}
+	function hideBanner() { document.getElementById("buildBanner").classList.add("d-none"); }
+
+	// Polls while the server is building the dataset (HTTP 202).
+	async function fetchData(url) {
+		for (;;) {
+			const res = await fetch(url);
+			const body = await res.json();
+			if (res.status === 202) {
+				showBanner("Building the dataset from the database… this can take several minutes for large countries" +
+					(body.started_at ? " (started " + body.started_at + ")" : "") + ". The page will refresh automatically.");
+				await sleep(4000);
+				url = url.replace(/([?&])refresh=1&?/, "$1").replace(/[?&]$/, "");
+				continue;
+			}
+			if (!res.ok || body.error) throw new Error(body.error || ("HTTP " + res.status));
+			hideBanner();
+			return body;
+		}
+	}
+
+	const table = new Tabulator("#data-table", {
+		height: "62vh",
+		layout: "fitDataFill",
+		placeholder: "No accounts match the current filters.",
+		columns: columns,
+		movableColumns: true,
+		headerSortTriState: true,
+		pagination: true,
+		paginationMode: "remote",
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		filterMode: "remote",
+		sortMode: "remote",
+		ajaxURL: dataUrl,
+		ajaxRequestFunc: function (url, config, params) {
+			return fetchData(url + "?" + buildQuery(params)).then(function (body) {
+				applyStats(body);
+				return body;
+			});
+		},
+		dataLoaderLoading: "Loading…",
+	});
+
+	table.on("dataLoadError", function (err) {
+		showBanner("Failed to load data: " + (err && err.message ? err.message : err));
+	});
+
+	function fmt(n, digits) {
+		return Number(n || 0).toLocaleString(undefined, {
+			minimumFractionDigits: digits || 0,
+			maximumFractionDigits: digits || 0,
+		});
+	}
+
+	function applyStats(body) {
+		const s = body.stats || {};
+		document.getElementById("rowCount").textContent = fmt(body.last_row);
+		document.getElementById("totalCount").textContent = fmt(body.total_all);
+		document.getElementById("builtAt").textContent = body.built_at ? " — data built " + body.built_at : "";
+
+		document.getElementById("cardAccounts").textContent = fmt(s.accounts);
+		document.getElementById("cardAvgControls").textContent = fmt(s.avg_controls, 2);
+		document.getElementById("cardAvgPhases").textContent = fmt(s.avg_phases, 2);
+		document.getElementById("cardSites").textContent = fmt(s.total_sites);
+
+		refreshNistTable(s.table || {}, s.denominators || {});
+	}
+
+	const NIST_ROWS = [
+		{ key: "identify", label: "Identify" },
+		{ key: "protect", label: "Protect" },
+		{ key: "detect", label: "Detect" },
+		{ key: "respond", label: "Respond" },
+		{ key: "recover", label: "Recover" },
+		{ key: "uncategorized", label: "Uncategorized" },
+		{ key: "ge1", label: "≥ 1 NIST Category", section: true },
+		{ key: "ge2", label: "≥ 2 NIST Categories" },
+		{ key: "ge3", label: "≥ 3 NIST Categories" },
+		{ key: "ge4", label: "≥ 4 NIST Categories" },
+		{ key: "eq5", label: "5 NIST Categories" },
+	];
+
+	function refreshNistTable(tbl, denom) {
+		const buckets = ["all", "gt500", "mid", "lt10"];
+		function pctText(v) { return (v === null || v === undefined) ? "–" : fmt(v, 1) + "%"; }
+
+		nistRows = [];
+		const tbody = document.querySelector("#nistTable tbody");
+		tbody.innerHTML = "";
+		NIST_ROWS.forEach(function (m) {
+			const values = buckets.map(function (b) { return (tbl[m.key] || {})[b]; });
+			nistRows.push([m.label].concat(values.map(function (v) { return (v === null || v === undefined) ? "" : Number(v).toFixed(1); })));
+			const tr = document.createElement("tr");
+			if (m.section) tr.className = "section-start";
+			tr.innerHTML = "<th>" + m.label + "</th>" +
+				values.map(function (v) { return '<td class="num">' + pctText(v) + "</td>"; }).join("");
+			tbody.appendChild(tr);
+		});
+
+		document.getElementById("nistNAll").textContent = fmt(denom.all);
+		document.getElementById("nistNGt500").textContent = fmt(denom.gt500);
+		document.getElementById("nistNMid").textContent = fmt(denom.mid);
+		document.getElementById("nistNLt10").textContent = fmt(denom.lt10);
+		document.getElementById("nistNUnknown").textContent = fmt(denom.unknown);
+	}
+
+	function downloadNistTable() {
+		const header = ["NIST Category", "Overall (%)", "Firm Size (%) - >500 Employees",
+			"Firm Size (%) - <500 Employees ≥10", "Firm Size (%) - <10 Employees"];
+		const lines = [header].concat(nistRows).map(function (r) {
+			return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(",");
+		});
+		const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+		const a = document.createElement("a");
+		a.href = URL.createObjectURL(blob);
+		a.download = "{{ country }}_nist_coverage.csv";
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(a.href);
+	}
+
+	function buildColumnToggles() {
+		const grid = document.getElementById("colToggleGrid");
+		grid.innerHTML = "";
+		columns.forEach(function (c) {
+			const label = document.createElement("label");
+			const cb = document.createElement("input");
+			cb.type = "checkbox";
+			cb.checked = true;
+			cb.addEventListener("change", function () {
+				if (cb.checked) table.showColumn(c.field);
+				else table.hideColumn(c.field);
+			});
+			label.appendChild(cb);
+			label.appendChild(document.createTextNode(c.field));
+			grid.appendChild(label);
+		});
+	}
+	buildColumnToggles();
+
+	// ---- Account technologies modal ------------------------------------
+	function buildTechTable() {
+		if (techTable) return techTable;
+		techTable = new Tabulator("#tech-table", {
+			height: "45vh",
+			layout: "fitColumns",
+			placeholder: "Loading technologies…",
+			pagination: true,
+			paginationSize: 50,
+			paginationSizeSelector: [25, 50, 100, 250],
+			movableColumns: true,
+			headerSortTriState: true,
+			columns: [
+				{ title: "product_id", field: "product_id", headerFilter: "input", width: 110 },
+				textCol("vendor"),
+				textCol("product", 2),
+				textCol("productcategory", 2),
+				textCol("security_category", 2),
+				{ title: "nist_phase", field: "nist_phase", headerFilter: "list", headerFilterParams: { valuesLookup: true, clearable: true } },
+				Object.assign(boolCol("security_product"), { headerFilterFunc: boolFilter }),
+				Object.assign(boolCol("is_open_source"), { headerFilterFunc: boolFilter }),
+				Object.assign(numCol("n_sites", "e.g. >1"), { width: 100, headerFilterFunc: numericFilter }),
+			],
+		});
+		return techTable;
+	}
+
+	// Local (client-side) filters used inside the modals.
+	function boolFilter(headerValue, rowValue) {
+		if (headerValue === "" || headerValue === null || headerValue === undefined) return true;
+		return String(rowValue) === String(headerValue);
+	}
+	function numericFilter(headerValue, rowValue) {
+		if (headerValue === "" || headerValue === null || headerValue === undefined) return true;
+		if (rowValue === null || rowValue === undefined || rowValue === "") return false;
+		const m = String(headerValue).trim().match(/^(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)$/);
+		if (!m) return true;
+		const op = m[1] || "=";
+		const target = parseFloat(m[2]);
+		const val = parseFloat(rowValue);
+		if (isNaN(val)) return false;
+		switch (op) {
+			case "<": return val < target;
+			case ">": return val > target;
+			case "<=": return val <= target;
+			case ">=": return val >= target;
+			default: return val === target;
+		}
+	}
+
+	function accountQuery(row) {
+		let q = "?account_id=" + encodeURIComponent(row.account_id);
+		if (row.region) q += "&regions=" + encodeURIComponent(String(row.region).replace(/\s+/g, ""));
+		return q;
+	}
+
+	function openTechnologies(row) {
+		const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("techModal"));
+		document.getElementById("techModalTitle").textContent =
+			(row.account_name || row.account_id) + " — Technologies & NIST categories";
+		document.getElementById("techError").classList.add("d-none");
+		document.getElementById("techPhaseBadges").innerHTML = "";
+		["techCardTotal", "techCardSecurity", "techCardPhases"].forEach(function (id) {
+			document.getElementById(id).textContent = "0";
+		});
+		modal.show();
+
+		const t = buildTechTable();
+		t.setData([]);
+		techSecurityOnly = false;
+		document.getElementById("btnTechSecurityOnly").classList.remove("active");
+
+		fetch(techApiUrl + accountQuery(row))
+			.then(function (res) { return res.json(); })
+			.then(function (data) {
+				if (data.error) {
+					const err = document.getElementById("techError");
+					err.textContent = data.error;
+					err.classList.remove("d-none");
+					return;
+				}
+				const s = data.summary || {};
+				document.getElementById("techCardTotal").textContent = fmt(s.technologies);
+				document.getElementById("techCardSecurity").textContent = fmt(s.security_products);
+				document.getElementById("techCardPhases").textContent = fmt(s.nist_phases);
+
+				const badges = document.getElementById("techPhaseBadges");
+				["Identify", "Protect", "Detect", "Respond", "Recover", "Uncategorized"].forEach(function (phase) {
+					if (!(s.phase_counts || {})[phase]) return;
+					const b = document.createElement("span");
+					b.className = "phase-badge";
+					b.textContent = phase + ": " + s.phase_counts[phase];
+					badges.appendChild(b);
+				});
+
+				t.setData(data.rows || []);
+			})
+			.catch(function (err) {
+				const box = document.getElementById("techError");
+				box.textContent = "Failed to load technologies: " + err;
+				box.classList.remove("d-none");
+			});
+	}
+
+	// ---- Account sites modal -------------------------------------------
+	function openSites(row) {
+		const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("sitesModal"));
+		document.getElementById("sitesModalTitle").textContent =
+			(row.account_name || row.account_id) + " — Sites";
+		document.getElementById("sitesError").classList.add("d-none");
+		document.getElementById("sitesCount").textContent = "0";
+		modal.show();
+
+		if (!sitesTable) {
+			sitesTable = new Tabulator("#sites-table", {
+				height: "55vh",
+				layout: "fitData",
+				placeholder: "Loading sites…",
+				pagination: true,
+				paginationSize: 25,
+				paginationSizeSelector: [25, 50, 100],
+				movableColumns: true,
+				headerSortTriState: true,
+			});
+		}
+		sitesTable.setData([]);
+
+		fetch(sitesApiUrl + accountQuery(row))
+			.then(function (res) { return res.json(); })
+			.then(function (data) {
+				if (data.error) {
+					const err = document.getElementById("sitesError");
+					err.textContent = data.error;
+					err.classList.remove("d-none");
+					return;
+				}
+				document.getElementById("sitesCount").textContent = fmt((data.rows || []).length);
+				sitesTable.setColumns((data.columns || []).map(function (c) { return textCol(c); }));
+				sitesTable.setData(data.rows || []);
+			})
+			.catch(function (err) {
+				const box = document.getElementById("sitesError");
+				box.textContent = "Failed to load sites: " + err;
+				box.classList.remove("d-none");
+			});
+	}
+
+	// ---- Wiring --------------------------------------------------------
+	document.getElementById("btnToggleCols").addEventListener("click", function () {
+		document.getElementById("colTogglePanel").classList.toggle("open");
+	});
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		const q = buildQuery({ sort: table.getSorters(), filter: table.getHeaderFilters() });
+		window.location.href = downloadUrl + (q ? "?" + q : "");
+	});
+	document.getElementById("btnDownloadNist").addEventListener("click", downloadNistTable);
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		table.clearHeaderFilter();
+	});
+	document.getElementById("btnRebuild").addEventListener("click", function () {
+		forceRefresh = true;
+		table.setPage(1);
+	});
+	document.getElementById("btnTechDownload").addEventListener("click", function () {
+		if (techTable) techTable.download("csv", "account_technologies.csv");
+	});
+	document.getElementById("btnTechClearFilters").addEventListener("click", function () {
+		if (techTable) {
+			techTable.clearFilter(true);
+			techTable.clearHeaderFilter();
+		}
+		techSecurityOnly = false;
+		document.getElementById("btnTechSecurityOnly").classList.remove("active");
+	});
+	document.getElementById("btnTechSecurityOnly").addEventListener("click", function () {
+		if (!techTable) return;
+		techSecurityOnly = !techSecurityOnly;
+		this.classList.toggle("active", techSecurityOnly);
+		if (techSecurityOnly) techTable.setFilter("security_product", "=", true);
+		else techTable.clearFilter();
+	});
+	document.getElementById("btnSitesDownload").addEventListener("click", function () {
+		if (sitesTable) sitesTable.download("csv", "account_sites.csv");
+	});
+	document.getElementById("btnSitesClearFilters").addEventListener("click", function () {
+		if (sitesTable) {
+			sitesTable.clearFilter(true);
+			sitesTable.clearHeaderFilter();
+		}
+	});
+});
+</script>
+{% endblock %}

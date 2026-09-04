@@ -3,3 +3,4 @@ flask_app/data/tech_cve/swdb_universe_installs.csv
 .DS_Store
 **/.DS_Store
 *.csv
+data/nist_cache/

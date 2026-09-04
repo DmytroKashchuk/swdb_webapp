@@ -1,7 +1,10 @@
-from flask import Flask, render_template, request, jsonify, abort
+from flask import Flask, render_template, request, jsonify, abort, Response
 import markdown
 from pathlib import Path
+from datetime import datetime, timezone
 import csv
+import re
+import threading
 import pandas as pd
 import psycopg2
 import psycopg2.extras
@@ -1425,6 +1428,535 @@ def db_table_columns_api():
 		return jsonify({"error": str(exc)}), 500
 
 	return jsonify({"rows": rows})
+
+
+# ---------------------------------------------------------------------------
+# NIST Categories (Australia / United States)
+# ---------------------------------------------------------------------------
+
+NIST_PHASES = ["Identify", "Protect", "Detect", "Respond", "Recover"]
+
+NIST_COUNTRIES = {
+	"australia": {
+		"label": "Australia",
+		"accounts": "australia_2022_accounts",
+		"sites": "australia_2022_sites",
+		"technologies": "australia_2022_technologies",
+		"controls": "australia_nist_controls",
+	},
+	"usa": {
+		"label": "United States",
+		"accounts": "usa_2022_accounts",
+		"sites": "usa_2022_sites",
+		"technologies": "usa_2022_sites_technology",
+		"controls": "usa_2022_nist_controls",
+	},
+	# all_2022_* are UNION ALL views over the regional tables; the same account
+	# can appear in several regions, so accounts are de-duplicated on build.
+	"all": {
+		"label": "All Regions",
+		"accounts": "all_2022_accounts",
+		"sites": "all_2022_sites",
+		"technologies": "all_2022_sites_technology",
+		"controls": "all_2022_nist_controls",
+		"phases_table": "all_2022_nist_phases",
+		"extra_columns": ["region", "account_country"],
+	},
+}
+
+NIST_BASE_COLUMNS = [
+	"account_id", "account_name", "account_trade_name", "account_url",
+	"n_controls", "n_nist_phases", "account_employees", "account_city",
+	"account_revenue_usd", "account_state", "num_sites",
+	"has_identify", "has_protect", "has_detect", "has_respond", "has_recover",
+	"has_uncategorized",
+]
+NIST_NUM_COLS = {"n_controls", "n_nist_phases", "account_employees", "account_revenue_usd", "num_sites"}
+NIST_BOOL_COLS = {c for c in NIST_BASE_COLUMNS if c.startswith("has_")}
+
+
+def _nist_columns(cfg):
+	"""Column order for a country: base columns, extras inserted after account_state."""
+	cols = list(NIST_BASE_COLUMNS)
+	pos = cols.index("account_state") + 1
+	for i, c in enumerate(cfg.get("extra_columns", [])):
+		cols.insert(pos + i, c)
+	return cols
+
+
+def _nist_text_cols(cols):
+	return [c for c in cols if c not in NIST_NUM_COLS and c not in NIST_BOOL_COLS]
+
+NIST_CACHE_DIR = Path(__file__).parent / "data" / "nist_cache"
+NIST_MAX_PAGE_SIZE = 500
+
+# The build scans every technology row (13M for AU, 415M for US), so the
+# result is persisted to parquet and built in a background thread.
+_nist_cache = {}
+_nist_lock = threading.Lock()
+
+
+def _nist_country(country):
+	cfg = NIST_COUNTRIES.get(country)
+	if not cfg:
+		abort(404)
+	return cfg
+
+
+def _nist_state(country):
+	with _nist_lock:
+		return _nist_cache.setdefault(country, {
+			"df": None, "built_at": None, "building": False, "error": None,
+		})
+
+
+def _nist_cache_path(country):
+	return NIST_CACHE_DIR / f"{country}_nist_categories.parquet"
+
+
+def _build_nist_df(cfg):
+	"""Accounts + NIST controls + per-account NIST phase flags + site counts."""
+
+	columns = _nist_columns(cfg)
+	extra = cfg.get("extra_columns", [])
+	# In multi-region views an account can exist in several regions: list them all.
+	extra_sql = "".join(
+		f",\n\t\t       reg.regions AS region" if c == "region" else f",\n\t\t       acc.{c}"
+		for c in extra
+	)
+	region_join = (
+		f"""JOIN (SELECT account_id, string_agg(DISTINCT region, ', ' ORDER BY region) AS regions
+		      FROM {cfg['accounts']} GROUP BY account_id) AS reg ON reg.account_id = acc.account_id"""
+		if "region" in extra else ""
+	)
+	# DISTINCT ON keeps one row per account when the source is a multi-region view.
+	accounts_sql = f"""
+		SELECT DISTINCT ON (acc.account_id)
+		       acc.account_id,
+		       acc.account_name,
+		       acc.account_trade_name,
+		       acc.account_url,
+		       nist.n_controls,
+		       acc.account_employees,
+		       acc.account_city,
+		       acc.account_revenue_usd,
+		       acc.account_state{extra_sql}
+		FROM {cfg['controls']} AS nist
+		JOIN {cfg['accounts']} AS acc ON acc.account_id = nist.account_id
+		{region_join}
+		ORDER BY acc.account_id;
+	"""
+	sites_sql = f"""
+		SELECT account_id, COUNT(DISTINCT site_id) AS num_sites
+		FROM {cfg['sites']}
+		GROUP BY account_id;
+	"""
+	# 'Multiple' and NULL phases on security products count as Uncategorized.
+	if cfg.get("phases_table"):
+		phases_sql = f"""
+			SELECT account_id::text AS account_id,
+			       COALESCE(NULLIF(nist_phase, 'Multiple'), 'Uncategorized') AS nist_phase
+			FROM {cfg['phases_table']}
+			GROUP BY 1, 2;
+		"""
+	else:
+		phases_sql = f"""
+			SELECT s.account_id,
+			       COALESCE(NULLIF(u.nist_phase, 'Multiple'), 'Uncategorized') AS nist_phase
+			FROM {cfg['technologies']} t
+			JOIN universe_installs_enhanced u
+			  ON u.productid::text = t.product_id AND u.security_product
+			JOIN {cfg['sites']} s ON s.site_id = t.site_id
+			GROUP BY 1, 2;
+		"""
+
+	conn = get_db_connection()
+	try:
+		with conn.cursor() as cur:
+			cur.execute(accounts_sql)
+			acc = pd.DataFrame(cur.fetchall(), columns=[d.name for d in cur.description])
+			cur.execute(sites_sql)
+			sites = pd.DataFrame(cur.fetchall(), columns=["account_id", "num_sites"])
+			cur.execute(phases_sql)
+			phases = pd.DataFrame(cur.fetchall(), columns=["account_id", "nist_phase"])
+	finally:
+		conn.close()
+
+	flags = (
+		pd.crosstab(phases["account_id"], phases["nist_phase"]).astype(bool)
+		if not phases.empty else pd.DataFrame()
+	)
+	for phase in NIST_PHASES + ["Uncategorized"]:
+		if phase not in flags.columns:
+			flags[phase] = False
+	flags = flags.rename(columns={p: f"has_{p.lower()}" for p in NIST_PHASES + ["Uncategorized"]})
+	flags["n_nist_phases"] = flags[[f"has_{p.lower()}" for p in NIST_PHASES]].sum(axis=1).astype(int)
+	flags = flags.reset_index()
+
+	df = acc.merge(sites, on="account_id", how="left").merge(flags, on="account_id", how="left")
+
+	for col in _nist_text_cols(columns):
+		df[col] = df[col].fillna("").astype(str)
+	for col in ("n_controls", "num_sites", "n_nist_phases"):
+		df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype("int64")
+	for col in ("account_employees", "account_revenue_usd"):
+		df[col] = pd.to_numeric(df[col].replace("", None), errors="coerce").astype("Int64")
+	for col in NIST_BOOL_COLS:
+		df[col] = df[col].eq(True)
+
+	df = df.sort_values(["n_controls", "n_nist_phases", "account_name"], ascending=[False, False, True])
+	return df[columns].reset_index(drop=True)
+
+
+def _nist_start_build(country):
+	cfg = _nist_country(country)
+	state = _nist_state(country)
+	with _nist_lock:
+		if state["building"]:
+			return
+		state["building"] = True
+		state["error"] = None
+		state["started_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+	def run():
+		try:
+			df = _build_nist_df(cfg)
+			NIST_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+			df.to_parquet(_nist_cache_path(country), index=False)
+			state["df"] = df
+			state["built_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+		except Exception as exc:  # pragma: no cover
+			state["error"] = str(exc)
+		finally:
+			state["building"] = False
+
+	threading.Thread(target=run, daemon=True, name=f"nist-build-{country}").start()
+
+
+def _nist_get_df(country, refresh=False):
+	"""Return the cached DataFrame, or None if it is (now) being built."""
+	state = _nist_state(country)
+	if refresh:
+		_nist_start_build(country)
+		return None
+	if state["df"] is not None:
+		return state["df"]
+	path = _nist_cache_path(country)
+	if path.exists() and not state["building"]:
+		df = pd.read_parquet(path)
+		state["df"] = df
+		state["built_at"] = datetime.fromtimestamp(
+			path.stat().st_mtime, tz=timezone.utc
+		).isoformat(timespec="seconds")
+		return df
+	_nist_start_build(country)
+	return None
+
+
+_NUM_FILTER_RE = re.compile(r"^(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)$")
+
+
+def _apply_nist_filters(df, args):
+	"""Apply `f_<column>` query params to the DataFrame."""
+	for col in df.columns:
+		raw = (args.get(f"f_{col}") or "").strip()
+		if not raw:
+			continue
+		if col in NIST_NUM_COLS:
+			m = _NUM_FILTER_RE.match(raw)
+			if not m:
+				continue
+			op, target = m.group(1) or "=", float(m.group(2))
+			s = df[col]
+			mask = {
+				"<": s < target, ">": s > target, "<=": s <= target,
+				">=": s >= target, "=": s == target,
+			}[op]
+			df = df[mask.fillna(False).astype(bool)]
+		elif col in NIST_BOOL_COLS:
+			if raw.lower() in ("true", "false"):
+				df = df[df[col] == (raw.lower() == "true")]
+		else:
+			df = df[df[col].str.contains(re.escape(raw), case=False, na=False)]
+	return df
+
+
+def _nist_stats(df):
+	"""Cards + NIST coverage table (% of accounts) by firm-size bucket."""
+	n = len(df)
+	emp = df["account_employees"]
+	bucket = pd.Series("unknown", index=df.index, dtype=object)
+	bucket[(emp > 500).fillna(False).astype(bool)] = "gt500"
+	bucket[((emp >= 10) & (emp <= 500)).fillna(False).astype(bool)] = "mid"
+	bucket[(emp < 10).fillna(False).astype(bool)] = "lt10"
+
+	metrics = {
+		"identify": df["has_identify"],
+		"protect": df["has_protect"],
+		"detect": df["has_detect"],
+		"respond": df["has_respond"],
+		"recover": df["has_recover"],
+		"uncategorized": df["has_uncategorized"],
+		"ge1": df["n_nist_phases"] >= 1,
+		"ge2": df["n_nist_phases"] >= 2,
+		"ge3": df["n_nist_phases"] >= 3,
+		"ge4": df["n_nist_phases"] >= 4,
+		"eq5": df["n_nist_phases"] == 5,
+	}
+	mdf = pd.DataFrame(metrics).astype(int)
+	totals = mdf.sum()
+	by_bucket = mdf.groupby(bucket).sum() if n else pd.DataFrame(columns=mdf.columns)
+	denoms = bucket.value_counts().to_dict() if n else {}
+
+	def pct(num, den):
+		return round(100.0 * num / den, 1) if den else None
+
+	table = {}
+	for key in metrics:
+		table[key] = {"all": pct(int(totals[key]), n)}
+		for b in ("gt500", "mid", "lt10"):
+			num = int(by_bucket.loc[b, key]) if b in by_bucket.index else 0
+			table[key][b] = pct(num, int(denoms.get(b, 0)))
+
+	return {
+		"accounts": int(n),
+		"avg_controls": round(float(df["n_controls"].mean()), 2) if n else 0,
+		"avg_phases": round(float(df["n_nist_phases"].mean()), 2) if n else 0,
+		"total_sites": int(df["num_sites"].sum()) if n else 0,
+		"denominators": {
+			"all": int(n),
+			"gt500": int(denoms.get("gt500", 0)),
+			"mid": int(denoms.get("mid", 0)),
+			"lt10": int(denoms.get("lt10", 0)),
+			"unknown": int(denoms.get("unknown", 0)),
+		},
+		"table": table,
+	}
+
+
+def _nist_building_response(country):
+	state = _nist_state(country)
+	if state["error"]:
+		return jsonify({"error": f"Dataset build failed: {state['error']}"}), 500
+	return jsonify({
+		"status": "building",
+		"started_at": state.get("started_at"),
+		"message": "Dataset is being built from the database; this can take several minutes for large countries.",
+	}), 202
+
+
+@app.route("/nist-categories/<country>")
+def nist_categories(country):
+	cfg = _nist_country(country)
+	columns = _nist_columns(cfg)
+	column_meta = [
+		{"field": c, "type": "num" if c in NIST_NUM_COLS else "bool" if c in NIST_BOOL_COLS else "text"}
+		for c in columns
+	]
+	return render_template(
+		"nist_categories.html",
+		country=country,
+		country_label=cfg["label"],
+		column_meta=column_meta,
+	)
+
+
+@app.route("/api/nist-categories/<country>/data")
+def nist_categories_data_api(country):
+	"""Server-side paginated / filtered / sorted rows plus stats on the filtered set."""
+	_nist_country(country)
+	refresh = request.args.get("refresh") == "1"
+	df = _nist_get_df(country, refresh=refresh)
+	if df is None:
+		return _nist_building_response(country)
+
+	try:
+		page = max(int(request.args.get("page", 1)), 1)
+		size = min(max(int(request.args.get("size", 50)), 1), NIST_MAX_PAGE_SIZE)
+	except (TypeError, ValueError):
+		return jsonify({"error": "page and size must be numbers."}), 400
+
+	total_all = len(df)
+	df = _apply_nist_filters(df, request.args)
+
+	sort = request.args.get("sort", "")
+	direction = request.args.get("dir", "asc")
+	if sort in df.columns:
+		df = df.sort_values(sort, ascending=(direction != "desc"), na_position="last", kind="stable")
+
+	stats = _nist_stats(df)
+	total = len(df)
+	last_page = max((total + size - 1) // size, 1)
+	page = min(page, last_page)
+	chunk = df.iloc[(page - 1) * size: page * size]
+	rows = chunk.astype(object).where(chunk.notna(), None).to_dict(orient="records")
+
+	return jsonify({
+		"data": rows,
+		"last_page": last_page,
+		"last_row": total,
+		"total_all": total_all,
+		"stats": stats,
+		"built_at": _nist_state(country)["built_at"],
+	})
+
+
+@app.route("/api/nist-categories/<country>/download")
+def nist_categories_download(country):
+	"""CSV of the filtered (and sorted) dataset."""
+	cfg = _nist_country(country)
+	df = _nist_get_df(country)
+	if df is None:
+		return _nist_building_response(country)
+
+	df = _apply_nist_filters(df, request.args)
+	sort = request.args.get("sort", "")
+	direction = request.args.get("dir", "asc")
+	if sort in df.columns:
+		df = df.sort_values(sort, ascending=(direction != "desc"), na_position="last", kind="stable")
+
+	def generate():
+		yield df.iloc[0:0].to_csv(index=False)
+		for start in range(0, len(df), 50000):
+			yield df.iloc[start:start + 50000].to_csv(index=False, header=False)
+
+	filename = f"{country}_nist_categories.csv"
+	return Response(
+		generate(),
+		mimetype="text/csv",
+		headers={"Content-Disposition": f"attachment; filename={filename}"},
+	)
+
+
+def _nist_regions_filter(cfg, alias):
+	"""SQL fragment + params restricting a multi-region view to the account's regions.
+
+	The constant `region` per UNION ALL branch lets PostgreSQL skip the other
+	regional tables entirely.
+	"""
+	if "region" not in cfg.get("extra_columns", []):
+		return "", {}
+	regions = [r.strip() for r in request.args.get("regions", "").split(",") if r.strip()]
+	if not regions:
+		return "", {}
+	return f" AND {alias}.region = ANY(%(regions)s)", {"regions": regions}
+
+
+@app.route("/api/nist-categories/<country>/account-sites")
+def nist_account_sites_api(country):
+	"""JSON API: every site (all columns) linked to an account."""
+	cfg = _nist_country(country)
+	account_id = request.args.get("account_id", "").strip()
+	if not account_id:
+		return jsonify({"error": "account_id is required."}), 400
+	region_sql, region_params = _nist_regions_filter(cfg, "s")
+
+	conn = None
+	try:
+		conn = get_db_connection()
+		with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+			cur.execute(
+				f"SELECT * FROM {cfg['sites']} s WHERE s.account_id = %(account_id)s{region_sql} "
+				f"ORDER BY COALESCE(NULLIF(site_employees, '')::bigint, 0) DESC, site_name;",
+				{"account_id": account_id, **region_params},
+			)
+			rows = [dict(r) for r in cur.fetchall()]
+			columns = [d.name for d in cur.description] if cur.description else []
+	except Exception as exc:
+		return jsonify({"error": str(exc)}), 500
+	finally:
+		if conn:
+			try:
+				conn.close()
+			except Exception:
+				pass
+
+	return jsonify({"account_id": account_id, "columns": columns, "rows": rows})
+
+
+@app.route("/api/nist-categories/<country>/account-technologies")
+def nist_account_technologies_api(country):
+	"""JSON API: every technology installed by an account, enriched with the
+	NIST phase / security category from `universe_installs_enhanced`.
+	"""
+	cfg = _nist_country(country)
+	account_id = request.args.get("account_id", "").strip()
+	if not account_id:
+		return jsonify({"error": "account_id is required."}), 400
+	sites_region_sql, region_params = _nist_regions_filter(cfg, "s")
+	tech_region_sql, _ = _nist_regions_filter(cfg, "t")
+
+	sql = f"""
+		SELECT t.product_id,
+		       COALESCE(u.vendorname, t.product_vendor)  AS vendor,
+		       COALESCE(u.product, t.product)            AS product,
+		       u.productcategory,
+		       u.actualcat                               AS security_category,
+		       CASE WHEN u.security_product
+		            THEN COALESCE(NULLIF(u.nist_phase, 'Multiple'), 'Uncategorized')
+		       END                                       AS nist_phase,
+		       COALESCE(u.security_product, FALSE)       AS security_product,
+		       COALESCE(u.is_open_source, FALSE)         AS is_open_source,
+		       COUNT(DISTINCT t.site_id)                 AS n_sites
+		FROM {cfg['sites']} s
+		JOIN {cfg['technologies']} t ON t.site_id = s.site_id{tech_region_sql}
+		LEFT JOIN universe_installs_enhanced u
+		       ON u.productid = NULLIF(t.product_id, '')::int
+		WHERE s.account_id = %(account_id)s{sites_region_sql}
+		GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+		ORDER BY n_sites DESC, product;
+	"""
+	account_sql = f"""
+		SELECT account_id, account_name, account_url, account_city,
+		       account_state, account_employees, account_nb_sites
+		FROM {cfg['accounts']} acc
+		WHERE acc.account_id = %(account_id)s{_nist_regions_filter(cfg, 'acc')[0]}
+		LIMIT 1;
+	"""
+
+	conn = None
+	try:
+		conn = get_db_connection()
+		with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+			params = {"account_id": account_id, **region_params}
+			cur.execute(account_sql, params)
+			account = cur.fetchone()
+			cur.execute(sql, params)
+			rows = [dict(r) for r in cur.fetchall()]
+	except Exception as exc:
+		return jsonify({"error": str(exc)}), 500
+	finally:
+		if conn:
+			try:
+				conn.close()
+			except Exception:
+				pass
+
+	df = pd.DataFrame(rows, columns=[
+		"product_id", "vendor", "product", "productcategory", "security_category",
+		"nist_phase", "security_product", "is_open_source", "n_sites",
+	])
+	df["nist_phase"] = df["nist_phase"].fillna("").replace({None: ""})
+	for col in ("vendor", "product", "productcategory", "security_category"):
+		df[col] = df[col].fillna("")
+
+	security = df[df["security_product"] == True]  # noqa: E712 - pandas mask
+	phases = {p for p in df["nist_phase"].tolist() if p in NIST_PHASES}
+	phase_counts = (
+		df.loc[df["nist_phase"] != "", "nist_phase"].value_counts().to_dict()
+		if not df.empty else {}
+	)
+
+	return jsonify({
+		"account": dict(account) if account else {"account_id": account_id},
+		"summary": {
+			"technologies": int(len(df)),
+			"security_products": int(len(security)),
+			"nist_phases": len(phases),
+			"phase_counts": {k: int(v) for k, v in phase_counts.items()},
+		},
+		"rows": df.to_dict(orient="records"),
+	})
 
 
 if __name__ == "__main__":
