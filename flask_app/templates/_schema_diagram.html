@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block page_title %}ER Diagram{% endblock %}</title>
+<link
+  href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+  rel="stylesheet"
+  integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+  crossorigin="anonymous"
+/>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f5f6f8;
+    color: #1a1a2e;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    display: flex; flex-direction: column;
+  }
+  body > .navbar { flex-shrink: 0; }
+  .navbar-brand { font-weight: 600; }
+
+  /* Everything below the navbar is positioned relative to this box */
+  #schema-root {
+    position: relative; flex: 1; min-height: 0; overflow: hidden;
+  }
+
+  #header {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 24px;
+    background: linear-gradient(180deg, #f5f6f8 70%, transparent);
+    pointer-events: none;
+  }
+  #header > * { pointer-events: auto; }
+  #header h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700; color: #2563eb;
+    letter-spacing: 1px; text-transform: uppercase; margin: 0;
+  }
+  #header h1 span { color: #94a3b8; font-weight: 400; }
+
+  .controls {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .controls button, .controls a.ctrl-btn {
+    text-decoration: none; display: inline-block; line-height: normal;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 500;
+    padding: 6px 14px; border-radius: 6px;
+    border: 1px solid #d1d5db; background: #fff; color: #64748b;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .controls button:hover, .controls a.ctrl-btn:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+
+  /* Segmented version switcher (used by multi-version schema pages) */
+  .version-switch {
+    display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px;
+    background: #fff; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  }
+  .version-switch a, .version-switch span {
+    padding: 6px 12px; color: #64748b; text-decoration: none;
+    border-right: 1px solid #e2e5ea; transition: all 0.15s;
+  }
+  .version-switch > :last-child { border-right: none; }
+  .version-switch a:hover { background: #eff6ff; color: #2563eb; }
+  .version-switch a.current { background: #2563eb; color: #fff; font-weight: 600; }
+  .version-switch span.missing { color: #cbd5e1; cursor: not-allowed; }
+
+  .field .new-badge {
+    font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+    background: #dcfce7; color: #15803d; flex-shrink: 0;
+  }
+
+  .legend {
+    position: absolute; bottom: 16px; left: 16px; z-index: 100;
+    display: flex; gap: 16px; font-size: 11px; color: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  #canvas-container {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    cursor: grab;
+  }
+  #canvas-container.grabbing { cursor: grabbing; }
+
+  #pan-layer {
+    position: absolute;
+    transform-origin: 0 0;
+  }
+
+  svg#connections {
+    position: absolute; top: 0; left: 0;
+    width: 6000px; height: 4000px;
+    pointer-events: none;
+  }
+  svg#connections path {
+    fill: none;
+    stroke-width: 1.5;
+    opacity: 0.35;
+    transition: opacity 0.3s;
+  }
+
+  .table-node {
+    position: absolute;
+    background: #ffffff;
+    border: 1px solid #e2e5ea;
+    border-radius: 10px;
+    min-width: 380px;
+    max-width: 440px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+    cursor: grab;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    user-select: none;
+  }
+  .table-node:hover {
+    border-color: #2563eb;
+    box-shadow: 0 4px 20px rgba(37,99,235,0.10), 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .table-node.dragging {
+    cursor: grabbing;
+    box-shadow: 0 8px 32px rgba(37,99,235,0.14);
+    border-color: #2563eb;
+    z-index: 50;
+  }
+
+  .table-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid #eef0f3;
+    display: flex; align-items: center; gap: 8px;
+    border-radius: 10px 10px 0 0;
+  }
+  .table-header .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .table-header .table-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; color: #1a1a2e;
+  }
+  .table-desc {
+    padding: 6px 16px;
+    border-bottom: 1px solid #eef0f3;
+    font-size: 11px; line-height: 1.4; color: #64748b;
+  }
+  .table-node.collapsed .table-desc { display: none; }
+
+  .type-data .table-header { background: linear-gradient(135deg, #eff6ff, #f8fafc); }
+  .type-data .badge { background: #2563eb; color: #fff; }
+
+  .type-lookup .table-header { background: linear-gradient(135deg, #ecfdf5, #f8fafc); }
+  .type-lookup .badge { background: #16a34a; color: #fff; }
+
+  .table-fields {
+    padding: 4px 0;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .field {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .field:hover { background: #f1f5f9; cursor: pointer; }
+  .field.active { background: #eff6ff; border-left: 2px solid #2563eb; padding-left: 14px; }
+
+  #field-popup {
+    position: fixed; z-index: 200;
+    background: #ffffff;
+    border: 1px solid #2563eb;
+    border-radius: 10px;
+    padding: 16px 18px;
+    max-width: 400px; min-width: 260px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(37,99,235,0.08);
+    display: none;
+    font-size: 13px;
+    animation: popIn 0.15s ease-out;
+  }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.95) translateY(4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  #field-popup .popup-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; padding-bottom: 8px;
+    border-bottom: 1px solid #e2e5ea;
+  }
+  #field-popup .popup-field-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700; color: #2563eb;
+  }
+  #field-popup .popup-close {
+    background: none; border: none; color: #94a3b8;
+    font-size: 16px; cursor: pointer; padding: 0 4px;
+    line-height: 1;
+  }
+  #field-popup .popup-close:hover { color: #1a1a2e; }
+  #field-popup .popup-row { margin-bottom: 8px; }
+  #field-popup .popup-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 600; color: #64748b;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  #field-popup .popup-value {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; color: #1a1a2e; line-height: 1.5;
+  }
+  #field-popup .popup-values-list {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+  }
+  #field-popup .popup-val-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; padding: 2px 8px;
+    background: #eff6ff; color: #2563eb;
+    border: 1px solid #bfdbfe; border-radius: 4px;
+  }
+  #field-popup .popup-fk-ref {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; padding: 3px 8px;
+    background: #f5f3ff; color: #7c3aed;
+    border: 1px solid #ddd6fe; border-radius: 4px;
+    display: inline-block; margin-top: 4px;
+  }
+
+  .field .key-badge {
+    font-size: 8px; font-weight: 700;
+    padding: 1px 4px; border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .key-pk { background: #fef3c7; color: #b45309; }
+  .key-cpk { background: #fed7aa; color: #9a3412; }
+  .key-fk { background: #ede9fe; color: #7c3aed; }
+
+  .field .fname { color: #334155; }
+  .field .ftype { color: #94a3b8; margin-left: auto; flex-shrink: 0; }
+
+  .collapse-btn {
+    width: 100%; padding: 4px;
+    background: none; border: none; border-top: 1px solid #eef0f3;
+    color: #94a3b8; font-size: 10px; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    border-radius: 0 0 10px 10px;
+  }
+  .collapse-btn:hover { color: #2563eb; background: #f8fafc; }
+
+  .table-node.collapsed .table-fields { display: none; }
+  .table-node.collapsed .collapse-btn { border-top: none; }
+
+  .zoom-info {
+    position: absolute; bottom: 16px; right: 16px; z-index: 100;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #94a3b8;
+  }
+
+  /* ── Search ── */
+  .search-wrap {
+    position: relative;
+    display: flex; align-items: center;
+  }
+  .search-wrap input {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 6px 12px 6px 30px;
+    border: 1px solid #d1d5db; border-radius: 6px;
+    background: #fff; color: #1a1a2e;
+    width: 220px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .search-wrap input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .search-wrap input::placeholder { color: #94a3b8; }
+  .search-wrap .search-icon {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: #94a3b8; font-size: 13px; pointer-events: none;
+  }
+  .search-wrap .search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: #94a3b8;
+    font-size: 14px; cursor: pointer; padding: 2px 4px;
+    display: none; line-height: 1;
+  }
+  .search-wrap .search-clear:hover { color: #1a1a2e; }
+  .search-wrap .search-clear.visible { display: block; }
+
+  .search-results-bar {
+    position: absolute; top: 44px; left: 50%; transform: translateX(-50%);
+    z-index: 110;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #64748b;
+    background: #fff; border: 1px solid #e2e5ea;
+    border-radius: 6px; padding: 5px 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    display: none; align-items: center; gap: 10px;
+  }
+  .search-results-bar.visible { display: flex; }
+  .search-results-bar .nav-btn {
+    background: none; border: 1px solid #d1d5db;
+    border-radius: 4px; padding: 1px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #64748b;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .search-results-bar .nav-btn:hover { border-color: #2563eb; color: #2563eb; }
+
+  .field.search-match {
+    background: #fef9c3 !important;
+    border-left: 2px solid #eab308 !important;
+    padding-left: 14px !important;
+  }
+  .field.search-current {
+    background: #fde68a !important;
+    border-left: 3px solid #d97706 !important;
+    padding-left: 13px !important;
+  }
+  .table-node.search-has-match {
+    border-color: #eab308 !important;
+    box-shadow: 0 2px 16px rgba(234,179,8,0.15) !important;
+  }
+
+  /* ── Filter Panels ── */
+  .panel-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.15);
+    z-index: 150;
+    display: none;
+    animation: fadeIn 0.15s ease;
+  }
+  .panel-overlay.open { display: block; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .side-panel {
+    position: absolute; top: 0; right: -420px; bottom: 0;
+    width: 400px;
+    background: #ffffff;
+    border-left: 1px solid #e2e5ea;
+    box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+    z-index: 160;
+    transition: right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; flex-direction: column;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .side-panel.open { right: 0; }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e2e5ea;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .panel-header h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700; color: #1a1a2e;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .panel-close {
+    background: none; border: none; color: #94a3b8;
+    font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1;
+  }
+  .panel-close:hover { color: #1a1a2e; }
+
+  .panel-actions {
+    padding: 10px 20px;
+    border-bottom: 1px solid #eef0f3;
+    display: flex; gap: 8px; flex-shrink: 0;
+  }
+  .panel-actions button {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px; font-weight: 500;
+    padding: 4px 12px; border-radius: 5px;
+    border: 1px solid #d1d5db; background: #fff; color: #64748b;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .panel-actions button:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+  .panel-actions button.active-btn { border-color: #2563eb; color: #fff; background: #2563eb; }
+
+  .panel-body {
+    flex: 1; overflow-y: auto; padding: 8px 0;
+  }
+  .panel-body::-webkit-scrollbar { width: 5px; }
+  .panel-body::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+  .panel-section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 600; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 10px 20px 4px;
+  }
+
+  .panel-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 20px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .panel-item:hover { background: #f8fafc; }
+
+  .panel-item input[type="checkbox"] {
+    accent-color: #2563eb;
+    width: 15px; height: 15px;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .panel-item label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: #334155;
+    cursor: pointer; flex: 1;
+  }
+  .panel-item .item-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 600;
+    padding: 1px 6px; border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .item-badge-data { background: #eff6ff; color: #2563eb; }
+  .item-badge-lookup { background: #ecfdf5; color: #16a34a; }
+  .item-badge-count { background: #f1f5f9; color: #64748b; }
+
+  .panel-item.disabled label { color: #cbd5e1; text-decoration: line-through; }
+</style>
+</head>
+<body>
+
+{% include "_navbar.html" %}
+
+<div id="schema-root">
+
+<div id="header">
+  <h1>{% block header_title %}ER Diagram{% endblock %}</h1>
+  <div class="controls">
+    {% if schema_versions %}
+    <div class="version-switch" title="Switch schema version">
+      {% for v in schema_versions %}
+        {% if v.available %}
+          <a href="{{ v.url }}" class="{% if v.current %}current{% endif %}" title="{{ v.title }}">{{ v.short }}</a>
+        {% else %}
+          <span class="missing" title="{{ v.title }} — workbook not found">{{ v.short }}</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% block extra_controls %}{% endblock %}
+    <button onclick="resetView()">Reset View</button>
+    <button onclick="expandAll()">Expand All</button>
+    <button onclick="collapseAll()">Collapse All</button>
+    <button onclick="autoLayout()">Auto Layout</button>
+    <button onclick="openPanel('tables')" id="btn-tables">Filter Tables</button>
+    <button onclick="openPanel('fields')" id="btn-fields">Filter Fields</button>
+    <div class="search-wrap">
+      <span class="search-icon">&#x1F50D;</span>
+      <input type="text" id="search-input" placeholder="Search fields..." oninput="onSearch(this.value)" onkeydown="onSearchKey(event)">
+      <button class="search-clear" id="search-clear" onclick="clearSearch()">&times;</button>
+    </div>
+  </div>
+</div>
+
+<div class="search-results-bar" id="search-bar">
+  <span id="search-count">0 results</span>
+  <button class="nav-btn" onclick="navSearch(-1)">&#9650; Prev</button>
+  <button class="nav-btn" onclick="navSearch(1)">&#9660; Next</button>
+  <button class="nav-btn" onclick="clearSearch()">Clear</button>
+</div>
+
+<!-- Tables Filter Panel -->
+<div class="panel-overlay" id="panel-overlay" onclick="closePanel()"></div>
+<div class="side-panel" id="panel-tables">
+  <div class="panel-header">
+    <h2>Filter Tables</h2>
+    <button class="panel-close" onclick="closePanel()">&times;</button>
+  </div>
+  <div class="panel-actions">
+    <button onclick="toggleAllTables(true)">Show All</button>
+    <button onclick="toggleAllTables(false)">Hide All</button>
+    <button onclick="showOnlyData()">Data Only</button>
+    <button onclick="showOnlyLookups()">Lookups Only</button>
+  </div>
+  <div class="panel-body" id="tables-list"></div>
+</div>
+
+<!-- Fields Filter Panel -->
+<div class="side-panel" id="panel-fields">
+  <div class="panel-header">
+    <h2>Filter Fields</h2>
+    <button class="panel-close" onclick="closePanel()">&times;</button>
+  </div>
+  <div class="panel-actions">
+    <button onclick="toggleAllTopics(true)">Show All</button>
+    <button onclick="toggleAllTopics(false)">Hide All</button>
+    <button onclick="showKeysOnly()">Keys Only</button>
+    <button onclick="showRelevantFields()">Relevant</button>
+  </div>
+  <div class="panel-body" id="fields-list"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div> Data Table</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Lookup Table</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#b45309"></div> PK</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> FK</div>
+  <div class="legend-item" style="color:#30363d">Drag tables · Scroll to zoom · Click field for details</div>
+</div>
+
+<div class="zoom-info" id="zoom-info">100%</div>
+
+<div id="canvas-container">
+  <div id="pan-layer">
+    <svg id="connections"></svg>
+  </div>
+</div>
+
+<div id="field-popup">
+  <div class="popup-header">
+    <span class="popup-field-name" id="popup-fname"></span>
+    <button class="popup-close" onclick="closePopup()">&times;</button>
+  </div>
+  <div id="popup-body"></div>
+</div>
+
+</div><!-- /#schema-root -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+
+<script>
+{% block schema_data %}{% endblock %}
+
+const panLayer = document.getElementById('pan-layer');
+const container = document.getElementById('canvas-container');
+const svgEl = document.getElementById('connections');
+const nodes = {};
+let scale = 1, panX = 40, panY = 60;
+
+function buildNode(tableName, tableData) {
+  const pos = defaultPositions[tableName] || { x: 0, y: 0 };
+  const el = document.createElement('div');
+  el.className = `table-node type-${tableData.type}`;
+  el.id = `node-${tableName}`;
+  el.style.left = pos.x + 'px';
+  el.style.top = pos.y + 'px';
+
+  let fieldsHTML = tableData.fields.map(f => {
+    let keyHTML = '';
+    if (f.key === 'PK') keyHTML = '<span class="key-badge key-pk">PK</span>';
+    else if (f.key === 'CPK') keyHTML = '<span class="key-badge key-cpk">CPK</span>';
+    else if (f.key === 'FK') keyHTML = '<span class="key-badge key-fk">FK</span>';
+    const isNew = (fieldDefs[`${tableName}.${f.name}`] || {}).added_in;
+    const newHTML = isNew ? '<span class="new-badge" title="Added in this version">NEW</span>' : '';
+    return `<div class="field" data-table="${tableName}" data-field="${f.name}" onclick="showFieldInfo(event, '${tableName}', '${f.name}')">${keyHTML}<span class="fname">${f.name}</span>${newHTML}<span class="ftype">${f.type}</span></div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="table-header">
+      <span class="badge">${tableData.type}</span>
+      <span class="table-name">${tableName}</span>
+    </div>
+    ${tableData.desc ? `<div class="table-desc">${tableData.desc}</div>` : ''}
+    <div class="table-fields">${fieldsHTML}</div>
+    <button class="collapse-btn" onclick="toggleCollapse('${tableName}')">▲ collapse</button>
+  `;
+
+  panLayer.appendChild(el);
+  nodes[tableName] = { el, x: pos.x, y: pos.y };
+  makeDraggable(el, tableName);
+}
+
+function makeDraggable(el, name) {
+  let startX, startY, origX, origY, isDragging = false;
+
+  el.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.collapse-btn') || e.target.closest('.table-fields')) return;
+    e.stopPropagation();
+    isDragging = true;
+    el.classList.add('dragging');
+    startX = e.clientX; startY = e.clientY;
+    origX = nodes[name].x; origY = nodes[name].y;
+
+    const onMove = (e2) => {
+      const dx = (e2.clientX - startX) / scale;
+      const dy = (e2.clientY - startY) / scale;
+      nodes[name].x = origX + dx;
+      nodes[name].y = origY + dy;
+      el.style.left = nodes[name].x + 'px';
+      el.style.top = nodes[name].y + 'px';
+      drawConnections();
+    };
+    const onUp = () => {
+      isDragging = false;
+      el.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+/* Pan & Zoom */
+let isPanning = false, panStartX, panStartY, panOrigX, panOrigY;
+
+container.addEventListener('mousedown', (e) => {
+  if (e.target.closest('.table-node')) return;
+  isPanning = true;
+  container.classList.add('grabbing');
+  panStartX = e.clientX; panStartY = e.clientY;
+  panOrigX = panX; panOrigY = panY;
+});
+document.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  panX = panOrigX + (e.clientX - panStartX);
+  panY = panOrigY + (e.clientY - panStartY);
+  applyTransform();
+});
+document.addEventListener('mouseup', () => {
+  isPanning = false;
+  container.classList.remove('grabbing');
+});
+
+container.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = container.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const oldScale = scale;
+  scale *= e.deltaY < 0 ? 1.08 : 0.93;
+  scale = Math.max(0.2, Math.min(3, scale));
+  panX = mx - (mx - panX) * (scale / oldScale);
+  panY = my - (my - panY) * (scale / oldScale);
+  applyTransform();
+  document.getElementById('zoom-info').textContent = Math.round(scale * 100) + '%';
+}, { passive: false });
+
+function applyTransform() {
+  panLayer.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+}
+
+/* Connections */
+function drawConnections() {
+  let paths = '';
+  relationships.forEach(rel => {
+    const fromNode = nodes[rel.from];
+    const toNode = nodes[rel.to];
+    if (!fromNode || !toNode) return;
+    if (hiddenTables.has(rel.from) || hiddenTables.has(rel.to)) return;
+
+    const fEl = fromNode.el, tEl = toNode.el;
+    const fw = fEl.offsetWidth, fh = fEl.offsetHeight;
+    const tw = tEl.offsetWidth, th = tEl.offsetHeight;
+
+    const fcx = fromNode.x + fw/2, fcy = fromNode.y + fh/2;
+    const tcx = toNode.x + tw/2, tcy = toNode.y + th/2;
+
+    let x1, y1, x2, y2;
+    const dx = tcx - fcx, dy = tcy - fcy;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) { x1 = fromNode.x + fw; y1 = fcy; x2 = toNode.x; y2 = tcy; }
+      else { x1 = fromNode.x; y1 = fcy; x2 = toNode.x + tw; y2 = tcy; }
+    } else {
+      if (dy > 0) { x1 = fcx; y1 = fromNode.y + fh; x2 = tcx; y2 = toNode.y; }
+      else { x1 = fcx; y1 = fromNode.y; x2 = tcx; y2 = toNode.y + th; }
+    }
+
+    const mx = (x1 + x2)/2, my = (y1 + y2)/2;
+    const cp1x = Math.abs(dx) > Math.abs(dy) ? mx : x1;
+    const cp1y = Math.abs(dx) > Math.abs(dy) ? y1 : my;
+    const cp2x = Math.abs(dx) > Math.abs(dy) ? mx : x2;
+    const cp2y = Math.abs(dx) > Math.abs(dy) ? y2 : my;
+
+    paths += `<path d="M${x1},${y1} C${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}" stroke="${rel.color}" />`;
+  });
+  svgEl.innerHTML = paths;
+}
+
+function toggleCollapse(name) {
+  const el = nodes[name].el;
+  el.classList.toggle('collapsed');
+  const btn = el.querySelector('.collapse-btn');
+  btn.textContent = el.classList.contains('collapsed') ? '▼ expand' : '▲ collapse';
+  setTimeout(drawConnections, 10);
+}
+
+function collapseAll() {
+  Object.keys(nodes).forEach(n => {
+    nodes[n].el.classList.add('collapsed');
+    nodes[n].el.querySelector('.collapse-btn').textContent = '▼ expand';
+  });
+  setTimeout(drawConnections, 10);
+}
+
+function expandAll() {
+  Object.keys(nodes).forEach(n => {
+    nodes[n].el.classList.remove('collapsed');
+    nodes[n].el.querySelector('.collapse-btn').textContent = '▲ collapse';
+  });
+  setTimeout(drawConnections, 10);
+}
+
+function resetView() {
+  scale = 1; panX = 40; panY = 60;
+  applyTransform();
+  document.getElementById('zoom-info').textContent = '100%';
+  Object.keys(defaultPositions).forEach(name => {
+    if (!nodes[name]) return;
+    nodes[name].x = defaultPositions[name].x;
+    nodes[name].y = defaultPositions[name].y;
+    nodes[name].el.style.left = defaultPositions[name].x + 'px';
+    nodes[name].el.style.top = defaultPositions[name].y + 'px';
+  });
+  drawConnections();
+}
+
+function autoLayout() {
+  const byType = t => Object.keys(schema).filter(n => schema[n].type === t);
+  const dataOrder = (typeof layoutOrder !== 'undefined' && layoutOrder.data) || byType('data');
+  const lookupOrder = (typeof layoutOrder !== 'undefined' && layoutOrder.lookup) || byType('lookup');
+  let y = 40;
+  dataOrder.forEach(name => {
+    if (!nodes[name]) return;
+    nodes[name].x = 80; nodes[name].y = y;
+    nodes[name].el.style.left = '80px'; nodes[name].el.style.top = y + 'px';
+    y += nodes[name].el.offsetHeight + 30;
+  });
+  y = 40;
+  lookupOrder.forEach(name => {
+    if (!nodes[name]) return;
+    nodes[name].x = 700; nodes[name].y = y;
+    nodes[name].el.style.left = '700px'; nodes[name].el.style.top = y + 'px';
+    y += nodes[name].el.offsetHeight + 30;
+  });
+  drawConnections();
+}
+
+/* ── Field Info Popup ── */
+const popup = document.getElementById('field-popup');
+let activeField = null;
+
+function showFieldInfo(e, table, field) {
+  e.stopPropagation();
+  const key = table + '.' + field;
+  const info = fieldDefs[key];
+
+  // Toggle off if clicking same field
+  if (activeField) activeField.classList.remove('active');
+  const clickedEl = e.currentTarget;
+  if (activeField === clickedEl) { closePopup(); return; }
+  activeField = clickedEl;
+  clickedEl.classList.add('active');
+
+  document.getElementById('popup-fname').textContent = field;
+
+  let html = '';
+  if (info) {
+    html += `<div class="popup-row"><div class="popup-label">Definition</div><div class="popup-value">${info.def}</div></div>`;
+    html += `<div class="popup-row"><div class="popup-label">Topic</div><div class="popup-value">${info.topic}</div></div>`;
+    if (info.values) {
+      html += `<div class="popup-row"><div class="popup-label">Possible Values</div><div class="popup-values-list">${info.values.map(v => `<span class="popup-val-chip">${v}</span>`).join('')}</div></div>`;
+    }
+    if (info.fk) {
+      html += `<div class="popup-row"><div class="popup-label">Foreign Key Reference</div><div class="popup-fk-ref">→ ${info.fk}</div></div>`;
+    }
+    if (info.applies) {
+      html += `<div class="popup-row"><div class="popup-label">Applies To</div><div class="popup-value">${info.applies}</div></div>`;
+    }
+    if (info.format) {
+      html += `<div class="popup-row"><div class="popup-label">Format</div><div class="popup-value">${info.format}</div></div>`;
+    }
+    if (info.default) {
+      html += `<div class="popup-row"><div class="popup-label">Default Value</div><div class="popup-value">${info.default}</div></div>`;
+    }
+    if (info.added_in) {
+      html += `<div class="popup-row"><div class="popup-label">Added In</div><div class="popup-value">${info.added_in}</div></div>`;
+    }
+  } else {
+    html = `<div class="popup-row"><div class="popup-value" style="color:#484f58">No additional info available for this field.</div></div>`;
+  }
+  document.getElementById('popup-body').innerHTML = html;
+
+  popup.style.display = 'block';
+  // Position near cursor
+  const px = Math.min(e.clientX + 12, window.innerWidth - 420);
+  const py = Math.min(e.clientY - 20, window.innerHeight - popup.offsetHeight - 20);
+  popup.style.left = px + 'px';
+  popup.style.top = Math.max(50, py) + 'px';
+}
+
+function closePopup() {
+  popup.style.display = 'none';
+  if (activeField) { activeField.classList.remove('active'); activeField = null; }
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#field-popup') && !e.target.closest('.field')) closePopup();
+});
+
+/* ── Panel System ── */
+let currentPanel = null;
+
+function openPanel(which) {
+  closePopup();
+  if (currentPanel === which) { closePanel(); return; }
+  closePanel();
+  currentPanel = which;
+  document.getElementById('panel-overlay').classList.add('open');
+  document.getElementById(`panel-${which}`).classList.add('open');
+  if (which === 'tables') buildTablesPanel();
+  if (which === 'fields') buildFieldsPanel();
+}
+
+function closePanel() {
+  document.getElementById('panel-overlay').classList.remove('open');
+  document.querySelectorAll('.side-panel').forEach(p => p.classList.remove('open'));
+  currentPanel = null;
+}
+
+/* ── Table Visibility ── */
+const hiddenTables = new Set();
+
+function buildTablesPanel() {
+  const container = document.getElementById('tables-list');
+  let html = '<div class="panel-section-title">Data Tables</div>';
+  Object.entries(schema).forEach(([name, data]) => {
+    if (data.type !== 'data') return;
+    const checked = !hiddenTables.has(name) ? 'checked' : '';
+    html += `<div class="panel-item ${hiddenTables.has(name)?'disabled':''}">
+      <input type="checkbox" id="tbl-${name}" ${checked} onchange="toggleTable('${name}', this.checked)">
+      <label for="tbl-${name}">${name}</label>
+      <span class="item-badge item-badge-data">${data.fields.length}</span>
+    </div>`;
+  });
+  html += '<div class="panel-section-title">Lookup Tables</div>';
+  Object.entries(schema).forEach(([name, data]) => {
+    if (data.type !== 'lookup') return;
+    const checked = !hiddenTables.has(name) ? 'checked' : '';
+    html += `<div class="panel-item ${hiddenTables.has(name)?'disabled':''}">
+      <input type="checkbox" id="tbl-${name}" ${checked} onchange="toggleTable('${name}', this.checked)">
+      <label for="tbl-${name}">${name}</label>
+      <span class="item-badge item-badge-lookup">${data.fields.length}</span>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function toggleTable(name, show) {
+  if (show) hiddenTables.delete(name);
+  else hiddenTables.add(name);
+  applyTableVisibility();
+  buildTablesPanel();
+}
+
+function toggleAllTables(show) {
+  Object.keys(schema).forEach(n => show ? hiddenTables.delete(n) : hiddenTables.add(n));
+  applyTableVisibility();
+  buildTablesPanel();
+}
+
+function showOnlyData() {
+  Object.entries(schema).forEach(([n, d]) => d.type === 'data' ? hiddenTables.delete(n) : hiddenTables.add(n));
+  applyTableVisibility();
+  buildTablesPanel();
+}
+
+function showOnlyLookups() {
+  Object.entries(schema).forEach(([n, d]) => d.type === 'lookup' ? hiddenTables.delete(n) : hiddenTables.add(n));
+  applyTableVisibility();
+  buildTablesPanel();
+}
+
+function applyTableVisibility() {
+  Object.keys(nodes).forEach(name => {
+    nodes[name].el.style.display = hiddenTables.has(name) ? 'none' : '';
+  });
+  setTimeout(drawConnections, 20);
+}
+
+/* ── Field Filtering ── */
+const allTopics = new Set();
+const visibleTopics = new Set();
+let showKeysAlways = true;
+
+// Gather all topics
+function gatherTopics() {
+  Object.values(fieldDefs).forEach(d => {
+    if (d.topic) allTopics.add(d.topic);
+  });
+  allTopics.forEach(t => visibleTopics.add(t));
+  visibleTopics.add('_no_topic');
+}
+
+function buildFieldsPanel() {
+  const container = document.getElementById('fields-list');
+
+  // Count fields per topic
+  const topicCounts = {};
+  Object.entries(fieldDefs).forEach(([key, d]) => {
+    const t = d.topic || '_no_topic';
+    topicCounts[t] = (topicCounts[t] || 0) + 1;
+  });
+
+  let html = '<div class="panel-section-title">Always Show Keys</div>';
+  html += `<div class="panel-item">
+    <input type="checkbox" id="keys-always" ${showKeysAlways?'checked':''} onchange="showKeysAlways=this.checked; applyFieldFilter()">
+    <label for="keys-always">Always show PK / FK / CPK fields</label>
+  </div>`;
+
+  html += '<div class="panel-section-title">Topics</div>';
+  const sorted = [...allTopics].sort();
+  sorted.forEach(topic => {
+    const checked = visibleTopics.has(topic) ? 'checked' : '';
+    const count = topicCounts[topic] || 0;
+    html += `<div class="panel-item">
+      <input type="checkbox" id="topic-${topic.replace(/[^a-zA-Z]/g,'_')}" ${checked} onchange="toggleTopic('${topic}', this.checked)">
+      <label for="topic-${topic.replace(/[^a-zA-Z]/g,'_')}">${topic}</label>
+      <span class="item-badge item-badge-count">${count}</span>
+    </div>`;
+  });
+
+  // No-topic fields
+  if (topicCounts['_no_topic']) {
+    const checked = visibleTopics.has('_no_topic') ? 'checked' : '';
+    html += `<div class="panel-item">
+      <input type="checkbox" id="topic-none" ${checked} onchange="toggleTopic('_no_topic', this.checked)">
+      <label for="topic-none">(No topic)</label>
+      <span class="item-badge item-badge-count">${topicCounts['_no_topic']}</span>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleTopic(topic, show) {
+  show ? visibleTopics.add(topic) : visibleTopics.delete(topic);
+  applyFieldFilter();
+  buildFieldsPanel();
+}
+
+function toggleAllTopics(show) {
+  if (show) allTopics.forEach(t => visibleTopics.add(t));
+  else visibleTopics.clear();
+  if (show) visibleTopics.add('_no_topic');
+  applyFieldFilter();
+  buildFieldsPanel();
+}
+
+function showKeysOnly() {
+  visibleTopics.clear();
+  showKeysAlways = true;
+  applyFieldFilter();
+  buildFieldsPanel();
+}
+
+function showRelevantFields() {
+  visibleTopics.clear();
+  const topics = (typeof relevantTopics !== 'undefined') ? relevantTopics : [...allTopics];
+  topics.forEach(t => visibleTopics.add(t));
+  showKeysAlways = true;
+  applyFieldFilter();
+  buildFieldsPanel();
+}
+
+function applyFieldFilter() {
+  const showAll = visibleTopics.size === allTopics.size + (visibleTopics.has('_no_topic') ? 1 : 0);
+
+  Object.entries(nodes).forEach(([tableName, node]) => {
+    const fields = node.el.querySelectorAll('.field');
+    fields.forEach(fieldEl => {
+      const fname = fieldEl.dataset.field;
+      const key = `${tableName}.${fname}`;
+      const info = fieldDefs[key];
+      const topic = info?.topic || '_no_topic';
+
+      // Check if field has a key
+      const hasKey = fieldEl.querySelector('.key-badge');
+
+      if (showAll) {
+        fieldEl.style.display = '';
+      } else if (showKeysAlways && hasKey) {
+        fieldEl.style.display = '';
+      } else if (visibleTopics.has(topic)) {
+        fieldEl.style.display = '';
+      } else {
+        fieldEl.style.display = 'none';
+      }
+    });
+  });
+  setTimeout(drawConnections, 20);
+}
+
+/* ── Search ── */
+let searchMatches = [];
+let searchIdx = -1;
+
+function onSearch(query) {
+  const q = query.trim().toLowerCase();
+  const clearBtn = document.getElementById('search-clear');
+  const bar = document.getElementById('search-bar');
+
+  // Clear old highlights
+  document.querySelectorAll('.search-match, .search-current').forEach(el => {
+    el.classList.remove('search-match', 'search-current');
+  });
+  document.querySelectorAll('.search-has-match').forEach(el => {
+    el.classList.remove('search-has-match');
+  });
+  // Expand collapsed tables that had matches
+  searchMatches = [];
+  searchIdx = -1;
+
+  if (!q) {
+    clearBtn.classList.remove('visible');
+    bar.classList.remove('visible');
+    return;
+  }
+
+  clearBtn.classList.add('visible');
+
+  // Search across all fields: name, definition, topic, values
+  Object.entries(nodes).forEach(([tableName, node]) => {
+    if (hiddenTables.has(tableName)) return;
+    const fields = node.el.querySelectorAll('.field');
+    let tableHasMatch = false;
+
+    fields.forEach(fieldEl => {
+      if (fieldEl.style.display === 'none') return;
+      const fname = fieldEl.dataset.field;
+      const key = `${tableName}.${fname}`;
+      const info = fieldDefs[key];
+
+      // Search in: field name, table name, definition, topic, values
+      const haystack = [
+        fname,
+        tableName,
+        info?.def || '',
+        info?.topic || '',
+        info?.fk || '',
+        info?.applies || '',
+        ...(info?.values || [])
+      ].join(' ').toLowerCase();
+
+      if (haystack.includes(q)) {
+        fieldEl.classList.add('search-match');
+        searchMatches.push({ tableName, fieldEl });
+        tableHasMatch = true;
+      }
+    });
+
+    if (tableHasMatch) {
+      node.el.classList.add('search-has-match');
+      // Auto-expand if collapsed
+      if (node.el.classList.contains('collapsed')) {
+        node.el.classList.remove('collapsed');
+        node.el.querySelector('.collapse-btn').textContent = '▲ collapse';
+      }
+    }
+  });
+
+  bar.classList.add('visible');
+  document.getElementById('search-count').textContent = searchMatches.length + ' result' + (searchMatches.length !== 1 ? 's' : '');
+
+  if (searchMatches.length > 0) {
+    searchIdx = 0;
+    highlightCurrent();
+  }
+}
+
+function highlightCurrent() {
+  document.querySelectorAll('.search-current').forEach(el => el.classList.remove('search-current'));
+  if (searchIdx < 0 || searchIdx >= searchMatches.length) return;
+  const match = searchMatches[searchIdx];
+  match.fieldEl.classList.add('search-current');
+  document.getElementById('search-count').textContent =
+    `${searchIdx + 1} / ${searchMatches.length}`;
+  scrollToNode(match.tableName, match.fieldEl);
+}
+
+function scrollToNode(tableName, fieldEl) {
+  const node = nodes[tableName];
+  const rect = node.el.getBoundingClientRect();
+  const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+
+  // Calculate target position to center the node
+  const targetX = -(node.x * scale) + containerRect.width / 2 - (node.el.offsetWidth * scale) / 2;
+  const targetY = -(node.y * scale) + containerRect.height / 2 - (node.el.offsetHeight * scale) / 2;
+
+  panX = targetX;
+  panY = targetY;
+  applyTransform();
+
+  // Scroll field into view within the table
+  fieldEl.scrollIntoView({ block: 'nearest' });
+}
+
+function navSearch(dir) {
+  if (searchMatches.length === 0) return;
+  searchIdx = (searchIdx + dir + searchMatches.length) % searchMatches.length;
+  highlightCurrent();
+}
+
+function onSearchKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    navSearch(e.shiftKey ? -1 : 1);
+  }
+  if (e.key === 'Escape') clearSearch();
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  onSearch('');
+  document.getElementById('search-input').blur();
+}
+
+// Global shortcut: Ctrl+F or Cmd+F
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+  }
+});
+
+// Init
+gatherTopics();
+Object.entries(schema).forEach(([name, data]) => buildNode(name, data));
+applyTransform();
+// Tables without a preset position fall back to the automatic column layout
+if (Object.keys(schema).some(n => !defaultPositions[n])) {
+  autoLayout();
+  Object.keys(nodes).forEach(n => { defaultPositions[n] = { x: nodes[n].x, y: nodes[n].y }; });
+}
+setTimeout(drawConnections, 50);
+window.addEventListener('resize', drawConnections);
+</script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+{# Company detail + sites modals shared by the Spiceworks company pages.
+   Usage: include at the end of the content block, then call
+   SwdbCompanyModals.init({ companyUrl, sitesUrl, year }) and use .openCompany(row) / .openSites(row). #}
+<style>
+	#companyModal .modal-content, #sitesModal .modal-content { border: 1px solid #ddd; border-radius: 6px; box-shadow: none; }
+	.profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .4rem 1.25rem; font-size: .8rem; }
+	.profile-grid .k { color: #888; font-size: .7rem; text-transform: uppercase; letter-spacing: .3px; }
+	.profile-grid .v { color: #222; word-break: break-word; }
+	.profile-grid .v a { color: #2c5d8f; }
+	.chip { display: inline-block; border: 1px solid #d5d5d5; border-radius: 4px; background: #f4f4f6; color: #444; font-size: .74rem; padding: .1rem .45rem; margin: 0 .3rem .3rem 0; cursor: pointer; }
+	.chip:hover { border-color: #0d6efd; color: #0d6efd; }
+	.chip.active { background: #0d6efd; border-color: #0d6efd; color: #fff; }
+	.chip.chip-more { background: #fff; color: #0d6efd; border-style: dashed; }
+	details.profile summary { font-size: .82rem; color: #555; cursor: pointer; }
+	#tech-table, #sites-table { font-size: .84rem; }
+</style>
+
+<!-- Company detail -->
+<div class="modal fade" id="companyModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<div>
+					<h5 class="modal-title mb-0" id="companyTitle">Company</h5>
+					<div class="small text-muted" id="companySubtitle"></div>
+				</div>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div id="companyError" class="alert alert-danger d-none"></div>
+
+				<div class="row g-2 mb-3">
+					<div class="col-6 col-md-3"><div class="stat-card"><div class="stat-label">Technologies</div><div class="stat-value" id="cTech">0</div></div></div>
+					<div class="col-6 col-md-3"><div class="stat-card"><div class="stat-label">Vendors</div><div class="stat-value" id="cVendors">0</div></div></div>
+					<div class="col-6 col-md-3"><div class="stat-card"><div class="stat-label">Categories</div><div class="stat-value" id="cCategories">0</div></div></div>
+					<div class="col-6 col-md-3"><div class="stat-card"><div class="stat-label">Employees · Sites</div><div class="stat-value" id="cEmpSites">–</div></div></div>
+				</div>
+
+				<details class="profile mb-3">
+					<summary>Company profile (all fields)</summary>
+					<div class="profile-grid mt-2" id="profileGrid"></div>
+				</details>
+
+				<div class="mb-2" id="categoryChips"></div>
+
+				<div class="toolbar mb-2">
+					<button class="btn btn-outline-secondary btn-sm" id="btnTechDownload">Download CSV</button>
+					<button class="btn btn-outline-secondary btn-sm" id="btnTechClearFilters">Clear Filters</button>
+					<span class="text-muted small" id="techShown"></span>
+				</div>
+				<div id="tech-table"></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Company sites -->
+<div class="modal fade" id="sitesModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<div>
+					<h5 class="modal-title mb-0" id="sitesTitle">Sites</h5>
+					<div class="small text-muted" id="sitesSubtitle"></div>
+				</div>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div id="sitesError" class="alert alert-danger d-none"></div>
+				<div class="toolbar mb-2">
+					<button class="btn btn-outline-secondary btn-sm" id="btnSitesCols">Show / Hide Columns</button>
+					<button class="btn btn-outline-secondary btn-sm" id="btnSitesDownload">Download CSV</button>
+					<button class="btn btn-outline-secondary btn-sm" id="btnSitesClearFilters">Clear Filters</button>
+					<span class="text-muted small" id="sitesShown"></span>
+				</div>
+				<div class="col-toggle-panel" id="sitesColPanel"><div class="col-toggle-grid" id="sitesColGrid"></div></div>
+				<div id="sites-table"></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+
+<script>
+// Shared helpers + modal logic. Tabulator/Bootstrap are used lazily (after page scripts load them).
+window.swdbUtil = (function () {
+	const fmt = (n, d) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: d || 0 });
+	const money = (v) => v == null ? "" : "$" + fmt(v);
+	const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+	const linkify = (v) => { if (!v) return ""; const href = /^https?:\/\//i.test(v) ? v : "https://" + v; return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(v)}</a>`; };
+	const MONEY_COLS = new Set(["company_annual_revenue", "company_annual_ict_spending"]);
+	/* Tabulator must not be instantiated inside a hidden modal: show first, then build once. */
+	function showModal(el) {
+		return new Promise((resolve) => {
+			if (el.classList.contains("show")) return resolve();
+			el.addEventListener("shown.bs.modal", () => resolve(), { once: true });
+			bootstrap.Modal.getOrCreateInstance(el).show();
+		});
+	}
+	function buildTable(selector, options) {
+		return new Promise((resolve) => {
+			const t = new Tabulator(selector, options);
+			t.on("tableBuilt", () => resolve(t));
+		});
+	}
+
+	return { fmt, money, escapeHtml, linkify, MONEY_COLS, showModal, buildTable };
+})();
+
+window.SwdbCompanyModals = {
+	init(opts) {
+		const { fmt, money, escapeHtml, linkify, MONEY_COLS, showModal, buildTable } = window.swdbUtil;
+		const $ = (id) => document.getElementById(id);
+		const companyUrl = opts.companyUrl, sitesUrl = opts.sitesUrl, YEAR = opts.year;
+
+	/* ───────── company sites ───────── */
+	let sitesTable = null;
+	let sitesColumns = [];
+	let currentSitesCompany = null;
+	const SITE_NUM = new Set(["site_employees", "site_domestic_hq"]);
+	const SITE_HIDDEN = new Set(["site_id", "site_standardized_name", "site_streetaddress2", "site_fax", "site_language", "site_franchise",
+		"site_primary_naics6_code", "site_primary_sic4_code", "site_continent", "site_country_region_code", "site_country_code", "site_region",
+		"site_subregion", "site_county", "site_cbsa_code", "site_cbsa_type", "site_csa_code", "site_csa", "site_legal_status", "site_start_year",
+		"site_employees_range", "site_primary_sub_industry", "site_primary_industry", "site_primary_naics6_description", "site_url_domain", "site_phone"]);
+
+	function siteColumns(names) {
+		return names.map((f) => {
+			const col = { title: f.replace(/^site_/, ""), field: f, headerFilter: "input", headerFilterPlaceholder: "Search…", visible: !SITE_HIDDEN.has(f), headerTooltip: f };
+			if (SITE_NUM.has(f)) Object.assign(col, { sorter: "number", hozAlign: "right", width: 120, headerFilterPlaceholder: "e.g. >10", formatter: (c) => c.getValue() == null ? "" : fmt(c.getValue()) });
+			if (f === "site_url" || f === "site_linkedin_link") col.formatter = (c) => linkify(c.getValue());
+			if (f === "site_name") Object.assign(col, { frozen: true, widthGrow: 2 });
+			return col;
+		});
+	}
+
+	async function ensureSitesTable(columns) {
+		if (sitesTable) { sitesTable.setColumns(siteColumns(columns)); return sitesTable; }
+		sitesTable = await buildTable("#sites-table", {
+			height: "60vh", layout: "fitDataFill", placeholder: "No sites.", headerSortTriState: true, movableColumns: true,
+			columns: siteColumns(columns), data: [],
+		});
+		sitesTable.on("dataFiltered", (filters, rows) => {
+			const total = sitesTable.getData().length;
+			if (total) $("sitesShown").textContent = rows.length === total ? `${fmt(total)} sites` : `${fmt(rows.length)} of ${fmt(total)} sites`;
+		});
+		return sitesTable;
+	}
+
+	function buildSitesToggles(columns) {
+		const grid = $("sitesColGrid");
+		grid.innerHTML = "";
+		columns.forEach((f) => {
+			const label = document.createElement("label");
+			const cb = document.createElement("input");
+			cb.type = "checkbox"; cb.checked = !SITE_HIDDEN.has(f);
+			cb.addEventListener("change", () => cb.checked ? sitesTable.showColumn(f) : sitesTable.hideColumn(f));
+			label.append(cb, document.createTextNode(f));
+			grid.appendChild(label);
+		});
+	}
+
+	async function openSites(row) {
+		currentSitesCompany = row;
+		$("sitesTitle").textContent = `Sites — ${row.company_name || "(no name)"}`;
+		$("sitesSubtitle").textContent = `${row.n_sites != null ? fmt(row.n_sites) + " sites · " : ""}${[row.company_primary_domain, row.company_location_country].filter(Boolean).join(" · ")}`;
+		$("sitesError").classList.add("d-none");
+		$("sitesShown").textContent = "Loading…";
+		const pending = fetch(sitesUrl + "?company_id=" + encodeURIComponent(row.company_id));
+		await showModal($("sitesModal"));
+		if (sitesTable) { sitesTable.clearHeaderFilter(); sitesTable.clearData(); }
+		try {
+			const res = await pending;
+			const body = await res.json();
+			if (!res.ok || body.error) throw new Error(body.error || ("HTTP " + res.status));
+			if (currentSitesCompany !== row) return;
+			const changed = JSON.stringify(body.columns) !== JSON.stringify(sitesColumns);
+			sitesColumns = body.columns;
+			const t = await ensureSitesTable(sitesColumns);
+			if (changed) buildSitesToggles(sitesColumns);
+			await t.setData(body.rows);
+			$("sitesShown").textContent = `${fmt(body.rows.length)} sites${body.truncated ? " (first 20,000 shown)" : ""}`;
+		} catch (err) {
+			$("sitesError").textContent = err.message; $("sitesError").classList.remove("d-none");
+			$("sitesShown").textContent = "";
+		}
+	}
+	$("btnSitesCols").addEventListener("click", () => $("sitesColPanel").classList.toggle("open"));
+	$("btnSitesClearFilters").addEventListener("click", () => { if (sitesTable) sitesTable.clearHeaderFilter(); });
+	$("btnSitesDownload").addEventListener("click", () => {
+		if (!sitesTable) return;
+		const name = (currentSitesCompany?.company_name || "company").replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+		sitesTable.download("csv", `swdb_${YEAR}_${name}_sites.csv`);
+	});
+
+
+	/* ───────── company detail ───────── */
+	let techTable = null;
+	let techRows = [];
+	let activeCategory = null;
+	let currentCompany = null;
+
+	async function ensureTechTable() {
+		if (techTable) return techTable;
+		techTable = await buildTable("#tech-table", {
+			height: "45vh", layout: "fitDataFill", placeholder: "No technologies.",
+			headerSortTriState: true,
+			initialSort: [{ column: "n_installs", dir: "desc" }],
+			columns: [
+				{ title: "Technology", field: "tech_name", headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: 2,
+				  formatter: (c) => { const d = c.getRow().getData(); const v = escapeHtml(c.getValue()); return d.tech_url ? `<a href="${escapeHtml(d.tech_url)}" target="_blank" rel="noopener">${v}</a>` : v; } },
+				{ title: "Vendor", field: "tech_vendor", headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: 1.5 },
+				{ title: "Category", field: "tech_category", headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: 1.5 },
+				{ title: "Series", field: "tech_series", headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: 1.5 },
+				{ title: "Hosting", field: "tech_hosting", headerFilter: "input", headerFilterPlaceholder: "Search…" },
+				{ title: "Universe installs", field: "n_installs", sorter: "number", hozAlign: "right", width: 150,
+				  headerTooltip: "Companies in the whole dataset where this technology was detected", formatter: (c) => c.getValue() == null ? "" : fmt(c.getValue()) },
+				{ title: "tech_id", field: "tech_id", width: 90, hozAlign: "right" },
+			],
+		});
+		techTable.on("dataFiltered", (filters, rows) => { $("techShown").textContent = `${fmt(rows.length)} of ${fmt(techRows.length)} shown`; });
+		return techTable;
+	}
+
+	function renderProfile(c) {
+		const grid = $("profileGrid");
+		grid.innerHTML = "";
+		Object.entries(c).forEach(([k, v]) => {
+			if (k === "company_id" || v == null || v === "") return;
+			let text = typeof v === "number" ? (MONEY_COLS.has(k) || k.includes("spending") || k.includes("revenue") ? money(v) : fmt(v)) : String(v);
+			if (/^(company_website|company_linkedin_link|company_primary_domain)$/.test(k)) {
+				const href = /^https?:\/\//i.test(text) ? text : "https://" + text;
+				text = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`;
+			} else text = escapeHtml(text);
+			grid.insertAdjacentHTML("beforeend", `<div><div class="k">${escapeHtml(k.replace(/^company_/, "").replace(/_/g, " "))}</div><div class="v">${text}</div></div>`);
+		});
+	}
+
+	const CHIP_LIMIT = 12;
+	function renderChips(categories, expanded) {
+		const shown = expanded ? categories : categories.slice(0, CHIP_LIMIT);
+		let html = shown.map(([cat, n]) => `<span class="chip" data-cat="${escapeHtml(cat)}" title="Filter technologies by this category">${escapeHtml(cat)} <strong>${n}</strong></span>`).join("");
+		if (categories.length > CHIP_LIMIT) {
+			html += `<span class="chip chip-more">${expanded ? "show fewer" : "+" + (categories.length - CHIP_LIMIT) + " more categories"}</span>`;
+		}
+		$("categoryChips").innerHTML = html;
+		document.querySelectorAll("#categoryChips .chip:not(.chip-more)").forEach((el) => el.addEventListener("click", () => { activeCategory = activeCategory === el.dataset.cat ? null : el.dataset.cat; applyCategoryChip(); }));
+		const more = document.querySelector("#categoryChips .chip-more");
+		if (more) more.addEventListener("click", () => renderChips(categories, !expanded));
+		applyCategoryChip();
+	}
+
+	function applyCategoryChip() {
+		if (!techTable) return;
+		if (activeCategory) techTable.setFilter("tech_category", "=", activeCategory); else techTable.clearFilter();
+		document.querySelectorAll("#categoryChips .chip").forEach((el) => el.classList.toggle("active", el.dataset.cat === activeCategory));
+	}
+
+	async function openCompany(row) {
+		currentCompany = row;
+		activeCategory = null;
+		$("companyTitle").textContent = row.company_name || "(no name)";
+		$("companySubtitle").textContent = [row.company_primary_domain, row.company_location_city, row.company_location_country].filter(Boolean).join(" · ");
+		$("companyError").classList.add("d-none");
+		$("categoryChips").innerHTML = "";
+		$("profileGrid").innerHTML = "";
+		["cTech", "cVendors", "cCategories"].forEach((id) => $(id).textContent = "…");
+		$("cEmpSites").textContent = "…";
+		$("techShown").textContent = "";
+		const pending = fetch(companyUrl + "?company_id=" + encodeURIComponent(row.company_id));
+		await showModal($("companyModal"));
+		const techTable = await ensureTechTable();
+		techTable.clearHeaderFilter();
+		techTable.clearFilter();
+		techTable.clearData();
+
+		try {
+			const res = await pending;
+			const body = await res.json();
+			if (!res.ok || body.error) throw new Error(body.error || ("HTTP " + res.status));
+			const c = body.company, s = body.summary;
+			$("cTech").textContent = fmt(s.technologies);
+			$("cVendors").textContent = fmt(s.vendors);
+			$("cCategories").textContent = fmt(s.categories.length);
+			$("cEmpSites").textContent = `${c.company_employees != null ? fmt(c.company_employees) : "–"} · ${c.n_sites != null ? fmt(c.n_sites) : "–"}`;
+			renderProfile(c);
+			renderChips(s.categories);
+			if (currentCompany !== row) return;
+			techRows = body.technologies;
+			await techTable.setData(techRows);
+			$("techShown").textContent = `${fmt(techRows.length)} of ${fmt(techRows.length)} shown`;
+		} catch (err) {
+			$("companyError").textContent = err.message; $("companyError").classList.remove("d-none");
+		}
+	}
+	$("btnTechDownload").addEventListener("click", () => {
+		if (!techTable) return;
+		const name = (currentCompany?.company_name || "company").replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+		techTable.download("csv", `swdb_${YEAR}_${name}_technologies.csv`);
+	});
+	$("btnTechClearFilters").addEventListener("click", () => { activeCategory = null; if (techTable) techTable.clearHeaderFilter(); applyCategoryChip(); });
+
+		return { openCompany, openSites };
+	},
+};
+</script>

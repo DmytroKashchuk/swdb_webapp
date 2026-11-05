@@ -1,0 +1,119 @@
+<nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
+	<div class="container-fluid">
+		<a class="navbar-brand" href="{{ url_for('index') }}">SWDB Browser</a>
+		<button
+			class="navbar-toggler"
+			type="button"
+			data-bs-toggle="collapse"
+			data-bs-target="#navbarNav"
+			aria-controls="navbarNav"
+			aria-expanded="false"
+			aria-label="Toggle navigation"
+		>
+			<span class="navbar-toggler-icon"></span>
+		</button>
+		<div class="collapse navbar-collapse" id="navbarNav">
+			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+				<li class="nav-item">
+					<a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">SQL Explorer</a>
+				</li>
+				<li class="nav-item">
+					<a class="nav-link {% if request.endpoint == 'companies' %}active{% endif %}" href="{{ url_for('companies') }}">Companies</a>
+				</li>
+				<!-- <li class="nav-item">
+					<a class="nav-link {% if request.endpoint == 'companies_accounts' %}active{% endif %}" href="{{ url_for('companies_accounts') }}">Companies Accounts</a>
+				</li> -->
+				<!-- <li class="nav-item">
+					<a class="nav-link {% if request.endpoint == 'compare_technologies' %}active{% endif %}" href="{{ url_for('compare_technologies') }}">Compare Technologies</a>
+				</li> -->
+				<!-- <li class="nav-item">
+					<a class="nav-link {% if request.endpoint == 'technology_history' %}active{% endif %}" href="{{ url_for('technology_history') }}">Technology History</a>
+				</li> -->
+				<!-- <li class="nav-item">
+					<a class="nav-link {% if request.endpoint == 'account_technologies' %}active{% endif %}" href="{{ url_for('account_technologies') }}">Account Technologies</a>
+				</li> -->
+				<!-- <li class="nav-item">
+					<a class="nav-link {% if request.endpoint == 'swdb_structure' %}active{% endif %}" href="{{ url_for('swdb_structure') }}">SWDB Structure</a>
+				</li> -->
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle {% if request.endpoint in ('swdb_schema', 'ccid_schema') %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">SWDB Schema</a>
+					<ul class="dropdown-menu">
+						<li><a class="dropdown-item {% if request.endpoint == 'swdb_schema' %}active{% endif %}" href="{{ url_for('swdb_schema') }}">Schema RDF v4.1 (2020–2022)</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'ccid_schema' and request.view_args.key == '2023' %}active{% endif %}" href="{{ url_for('ccid_schema', key='2023') }}">Schema CCID v5.0 (2023)</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'ccid_schema' and request.view_args.key == '2024' %}active{% endif %}" href="{{ url_for('ccid_schema', key='2024') }}">Schema CCID v5.1 (2024)</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'ccid_schema' and request.view_args.key == '2025' %}active{% endif %}" href="{{ url_for('ccid_schema', key='2025') }}">Schema CC v5.2 (2025)</a></li>
+					</ul>
+				</li>
+				<li class="nav-item">
+					<a class="nav-link {% if request.endpoint == 'documentation' %}active{% endif %}" href="{{ url_for('documentation') }}">Documentation</a>
+				</li>
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle {% if request.endpoint in ('general_info', 'db_tables', 'domain_names') %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">General Info</a>
+					<ul class="dropdown-menu">
+						<li><h6 class="dropdown-header">Database Tables</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'db_tables' %}active{% endif %}" href="{{ url_for('db_tables') }}">Database Tables</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'domain_names' %}active{% endif %}" href="{{ url_for('domain_names') }}">Domain Names</a></li>
+						<li><hr class="dropdown-divider"></li>
+						<li><h6 class="dropdown-header">Universe Installs</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs-2016' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs-2016') }}">Universe Installs 2016</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs-2020' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs-2020') }}">Universe Installs 2020</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs') }}">Universe Installs 2022</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs-2023' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs-2023') }}">Universe Installs 2023</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs-2024' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs-2024') }}">Universe Installs 2024</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs-2025' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs-2025') }}">Universe Installs 2025</a></li>
+						<li><hr class="dropdown-divider"></li>
+						<li><h6 class="dropdown-header">Enhanced</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'universe-installs-security' %}active{% endif %}" href="{{ url_for('general_info', slug='universe-installs-security') }}">Universe Installs Enhanced</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'product-categories' %}active{% endif %}" href="{{ url_for('general_info', slug='product-categories') }}">Security Products</a></li>
+						<li><hr class="dropdown-divider"></li>
+						<li><h6 class="dropdown-header">Counts</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'enterprises-counts' %}active{% endif %}" href="{{ url_for('general_info', slug='enterprises-counts') }}">Enterprises Counts 2022</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'product-counts' %}active{% endif %}" href="{{ url_for('general_info', slug='product-counts') }}">Product Counts 2022</a></li>
+						<li><hr class="dropdown-divider"></li>
+						<li><h6 class="dropdown-header">Years &amp; Regions</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'years-regions' %}active{% endif %}" href="{{ url_for('general_info', slug='years-regions') }}">Years &amp; Regions Available</a></li>
+						<li><hr class="dropdown-divider"></li>
+						<li><h6 class="dropdown-header">Regional Tech Distribution</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'general_info' and request.view_args.slug == 'regional-tech-distribution' %}active{% endif %}" href="{{ url_for('general_info', slug='regional-tech-distribution') }}">Regional Tech Distribution 2022</a></li>
+					</ul>
+				</li>
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle {% if request.endpoint in ('cpe_mapping', 'cve_summary') %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">CPE Mapping</a>
+					<ul class="dropdown-menu">
+						<li><a class="dropdown-item {% if request.endpoint == 'cpe_mapping' %}active{% endif %}" href="{{ url_for('cpe_mapping') }}">CPE Mapping</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'cve_summary' %}active{% endif %}" href="{{ url_for('cve_summary') }}">CVE Summary</a></li>
+					</ul>
+				</li>
+				<!-- <li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle {% if request.endpoint == 'nist_categories' and request.view_args.country == 'australia' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Australia</a>
+					<ul class="dropdown-menu">
+						<li><a class="dropdown-item {% if request.endpoint == 'nist_categories' and request.view_args.country == 'australia' %}active{% endif %}" href="{{ url_for('nist_categories', country='australia') }}">NIST Categories</a></li>
+					</ul>
+				</li> -->
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle {% if (request.endpoint == 'nist_categories' and request.view_args.country == 'all') or request.endpoint == 'hacked_sites' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">NIST Coverage</a>
+					<ul class="dropdown-menu">
+						<li><a class="dropdown-item {% if request.endpoint == 'nist_categories' and request.view_args.country == 'all' %}active{% endif %}" href="{{ url_for('nist_categories', country='all') }}">NIST 2022</a></li>
+						<!-- <li><hr class="dropdown-divider"></li>
+						<li><h6 class="dropdown-header">Ransomware Victims</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'hacked_sites' and request.view_args.key == 'victims' and request.view_args.level == 'sites' %}active{% endif %}" href="{{ url_for('hacked_sites', key='victims', level='sites') }}">Victims — Sites</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'hacked_sites' and request.view_args.key == 'victims' and request.view_args.level == 'domains' %}active{% endif %}" href="{{ url_for('hacked_sites', key='victims', level='domains') }}">Victims — Domains</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'hacked_sites' and request.view_args.key == 'victims' and request.view_args.level == 'accounts' %}active{% endif %}" href="{{ url_for('hacked_sites', key='victims', level='accounts') }}">Victims — Accounts</a></li>
+						<li><h6 class="dropdown-header">Municipalities</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'hacked_sites' and request.view_args.key == 'municipalities' and request.view_args.level == 'sites' %}active{% endif %}" href="{{ url_for('hacked_sites', key='municipalities', level='sites') }}">Municipalities — Sites</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'hacked_sites' and request.view_args.key == 'municipalities' and request.view_args.level == 'domains' %}active{% endif %}" href="{{ url_for('hacked_sites', key='municipalities', level='domains') }}">Municipalities — Domains</a></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'hacked_sites' and request.view_args.key == 'municipalities' and request.view_args.level == 'accounts' %}active{% endif %}" href="{{ url_for('hacked_sites', key='municipalities', level='accounts') }}">Municipalities — Accounts</a></li> -->
+					</ul>
+				</li>
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle {% if request.endpoint in ('swdb_companies', 'swdb_company_search') %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Spiceworks Browser</a>
+					<ul class="dropdown-menu dropdown-menu-end">
+						<li><h6 class="dropdown-header">Companies &amp; technologies</h6></li>
+						<li><a class="dropdown-item {% if request.endpoint == 'swdb_company_search' and request.view_args.year == '2023' %}active{% endif %}" href="{{ url_for('swdb_company_search', year='2023') }}">Company Search 2023</a></li>
+						<!-- <li><a class="dropdown-item {% if request.endpoint == 'swdb_companies' and request.view_args.year == '2023' %}active{% endif %}" href="{{ url_for('swdb_companies', year='2023') }}">Browse Companies 2023</a></li> -->
+					</ul>
+				</li>
+			</ul>
+		</div>
+	</div>
+</nav>

@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Documentation — SWDB Query Explorer{% endblock %}
+
+{% block extra_head %}
+<style>
+	.doc-sidebar {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		max-height: calc(100vh - 140px);
+		overflow-y: auto;
+	}
+	.doc-sidebar .list-group-item {
+		font-size: .85rem;
+		border-left: 0;
+		border-right: 0;
+	}
+	.doc-sidebar .list-group-item:first-child { border-top: 0; }
+	.doc-sidebar .list-group-item:last-child { border-bottom: 0; }
+	.doc-sidebar .folder-label {
+		font-size: .72rem;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		color: #777;
+		background: #f7f7fb;
+	}
+	.doc-sidebar .file-size {
+		font-size: .72rem;
+		color: #999;
+	}
+	.doc-viewer {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		min-height: calc(100vh - 140px);
+	}
+	.doc-viewer iframe {
+		width: 100%;
+		height: calc(100vh - 140px);
+		border: 0;
+		border-radius: 6px;
+	}
+	.doc-empty {
+		padding: 3rem 1rem;
+		color: #777;
+		text-align: center;
+		font-size: .9rem;
+	}
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .6rem;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+	.toolbar .btn-sm {
+		font-size: .8rem;
+		padding: .4rem .75rem;
+	}
+	.col-toggle-panel {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		margin-bottom: 1rem;
+		display: none;
+	}
+	.col-toggle-panel.open { display: block; }
+	.col-toggle-grid {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .35rem 1.25rem;
+	}
+	.col-toggle-grid label {
+		font-size: .82rem;
+		color: #444;
+		display: flex;
+		align-items: center;
+		gap: .35rem;
+		margin: 0;
+	}
+	.stats-bar {
+		font-size: .82rem;
+		color: #666;
+		margin-bottom: .5rem;
+	}
+	#sheet-table { font-size: .82rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<div class="d-flex align-items-baseline gap-3 mb-3">
+		<h4 class="mb-0">Documentation</h4>
+		<span class="text-muted small">RDF manuals and data dictionaries — PDFs open inline, Excel files are rendered as tables.</span>
+	</div>
+
+	<div class="row g-3">
+		<div class="col-12 col-lg-3">
+			<div class="doc-sidebar">
+				<div class="list-group list-group-flush">
+					{% for group in groups %}
+						{% if group.folder %}
+						<div class="list-group-item folder-label">{{ group.folder }}</div>
+						{% endif %}
+						{% for f in group.files %}
+						<a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {% if selected and selected.rel == f.rel %}active{% endif %}"
+						   href="{{ url_for('documentation', file=f.rel) }}">
+							<span>{{ f.name }}</span>
+							<span class="file-size {% if selected and selected.rel == f.rel %}text-white-50{% endif %}">{{ f.kind|upper }} · {{ f.size_kb }} KB</span>
+						</a>
+						{% endfor %}
+					{% endfor %}
+				</div>
+			</div>
+		</div>
+
+		<div class="col-12 col-lg-9">
+			{% if error %}
+			<div class="alert alert-warning">{{ error }}</div>
+			{% endif %}
+
+			{% if not selected %}
+			<div class="doc-viewer">
+				<div class="doc-empty">Select a document from the list to view it here.</div>
+			</div>
+
+			{% elif selected.kind == 'pdf' %}
+			<div class="toolbar">
+				<strong class="small">{{ selected.name }}</strong>
+				<a class="btn btn-outline-secondary btn-sm ms-auto" href="{{ url_for('documentation_file', rel=selected.rel) }}" target="_blank" rel="noopener">Open in new tab</a>
+			</div>
+			<div class="doc-viewer">
+				<iframe src="{{ url_for('documentation_file', rel=selected.rel) }}" title="{{ selected.name }}"></iframe>
+			</div>
+
+			{% elif selected.kind == 'xlsx' and sheets %}
+			<div class="toolbar">
+				<strong class="small">{{ selected.name }}</strong>
+				<select class="form-select form-select-sm w-auto" id="sheetSelect">
+					{% for s in sheets %}
+					<option value="{{ loop.index0 }}">{{ s.name }} ({{ s.rows|length }} rows)</option>
+					{% endfor %}
+				</select>
+				<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
+				<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download CSV</button>
+				<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+				<a class="btn btn-outline-secondary btn-sm ms-auto" href="{{ url_for('documentation_file', rel=selected.rel) }}">Download .xlsx</a>
+			</div>
+
+			<div class="col-toggle-panel" id="colTogglePanel">
+				<div class="col-toggle-grid" id="colToggleGrid"></div>
+			</div>
+
+			<div class="stats-bar">
+				Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> rows
+			</div>
+
+			<div id="sheet-table"></div>
+			{% endif %}
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if selected and selected.kind == 'xlsx' and sheets %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const sheets = {{ sheets|tojson }};
+	const baseName = {{ selected.name|tojson }}.replace(/\.xlsx?$/i, "");
+	let current = 0;
+
+	const table = new Tabulator("#sheet-table", {
+		height: "70vh",
+		layout: "fitDataFill",
+		placeholder: "No rows",
+		pagination: true,
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		movableColumns: true,
+		headerSortTriState: true,
+	});
+
+	function buildColumns(cols) {
+		return cols.map(function (c) {
+			return {
+				title: c,
+				field: c,
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+				formatter: "textarea",
+				maxWidth: 480,
+			};
+		});
+	}
+
+	function buildColumnToggles(cols) {
+		const grid = document.getElementById("colToggleGrid");
+		grid.innerHTML = "";
+		cols.forEach(function (c) {
+			const label = document.createElement("label");
+			const cb = document.createElement("input");
+			cb.type = "checkbox";
+			cb.checked = true;
+			cb.addEventListener("change", function () {
+				if (cb.checked) table.showColumn(c);
+				else table.hideColumn(c);
+			});
+			label.appendChild(cb);
+			label.appendChild(document.createTextNode(c));
+			grid.appendChild(label);
+		});
+	}
+
+	function refreshStats() {
+		document.getElementById("rowCount").textContent = table.getRows("active").length.toLocaleString();
+		document.getElementById("totalCount").textContent = sheets[current].rows.length.toLocaleString();
+	}
+
+	function loadSheet(idx) {
+		current = idx;
+		const s = sheets[idx];
+		table.clearHeaderFilter();
+		table.setColumns(buildColumns(s.columns));
+		table.setData(s.rows).then(function () {
+			buildColumnToggles(s.columns);
+			refreshStats();
+		});
+	}
+
+	table.on("dataFiltered", function () { setTimeout(refreshStats, 0); });
+	table.on("tableBuilt", function () { loadSheet(0); });
+
+	document.getElementById("sheetSelect").addEventListener("change", function (e) {
+		loadSheet(parseInt(e.target.value, 10));
+	});
+	document.getElementById("btnToggleCols").addEventListener("click", function () {
+		document.getElementById("colTogglePanel").classList.toggle("open");
+	});
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		table.download("csv", baseName + " - " + sheets[current].name + ".csv");
+	});
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		table.clearFilter(true);
+		table.clearHeaderFilter();
+	});
+});
+</script>
+{% endif %}
+{% endblock %}

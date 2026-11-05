@@ -153,6 +153,7 @@ document.addEventListener("DOMContentLoaded", function () {
 	const SECURITY_FIELD = "security_product";
 	const OSS_FIELD = "is_open_source";
 	const LINK_FIELD = "githublink";
+	const URL_FIELDS = ["product_vendor_url"];
 	let allData = [];
 	let colMeta = [];
 
@@ -216,6 +217,25 @@ document.addEventListener("DOMContentLoaded", function () {
 					headerFilterPlaceholder: "Search…",
 				};
 			}
+			if (URL_FIELDS.indexOf(c.field) !== -1) {
+				return {
+					title: c.field,
+					field: c.field,
+					formatter: function (cell) {
+						const v = String(cell.getValue() || "").trim();
+						if (!v) return "";
+						const href = /^https?:\/\//i.test(v) ? v : "https://" + v;
+						const a = document.createElement("a");
+						a.href = href;
+						a.target = "_blank";
+						a.rel = "noopener";
+						a.textContent = v;
+						return a;
+					},
+					headerFilter: "input",
+					headerFilterPlaceholder: "Search…",
+				};
+			}
 			return {
 				title: c.field,
 				field: c.field,
@@ -234,6 +254,7 @@ document.addEventListener("DOMContentLoaded", function () {
 		paginationSizeSelector: [25, 50, 100, 250, 500],
 		movableColumns: true,
 		headerSortTriState: true,
+		nestedFieldSeparator: false,
 	});
 
 	function refreshStats() {

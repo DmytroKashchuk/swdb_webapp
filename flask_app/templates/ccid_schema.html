@@ -1,0 +1,16 @@
+{% extends "_schema_diagram.html" %}
+
+{% block page_title %}{{ title }} — ER Diagram{% endblock %}
+{% block header_title %}{{ title }} <span>Entity-Relationship Diagram · {{ field_count }} fields / {{ table_count }} tables</span>{% endblock %}
+
+{% block extra_controls %}
+<a class="ctrl-btn" href="{{ url_for('ccid_schema_export', key=key) }}" title="Download the full schema as Markdown for use in LLM prompts">Export for LLM (.md)</a>
+{% endblock %}
+
+{% block schema_data %}
+const schema = {{ schema | tojson }};
+const fieldDefs = {{ field_defs | tojson }};
+const relationships = {{ relationships | tojson }};
+const defaultPositions = {{ positions | tojson }};
+const relevantTopics = {{ relevant_topics | tojson }};
+{% endblock %}

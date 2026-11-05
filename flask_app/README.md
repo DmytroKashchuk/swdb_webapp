@@ -31,13 +31,30 @@ http://127.0.0.1:5000/
 
 ## Usage
 
-1. Type or edit a **SELECT** query in the SQL box at the top of the page.
-2. Click **Run query**.
-3. The results will appear in the Tabulator table below.
-   - Columns are resizable and movable.
-   - The table supports horizontal scrolling to accommodate many columns.
+1. Browse the **Tables** sidebar (search by table or column name; `+` expands a table's columns). Click a table or column name to insert it at the cursor, or `▶` to preview the first 100 rows.
+2. Type or edit the query in the editor (autocomplete knows every table, and the columns of tables you have expanded). Press **Run** or **Ctrl/⌘ + Enter**. **Format** tidies the SQL.
+3. Results appear in the **Results** tab: sortable, per-column filters (`>100`, `=exact`), show/hide columns, CSV download, copy as JSON.
+4. **History** keeps the last 100 runs (with outcome); **Saved** stores named queries in the browser and can be exported/imported as JSON.
 
-> Note: Only `SELECT` queries are allowed for safety; other statement types will be rejected.
+Safety: every query runs in a read-only transaction with a 120 s statement timeout, one statement at a time, and is capped by the **Row limit** selector (max 10,000; a *truncated* badge tells you when more rows were available).
+
+> Note: Only read-only statements (`SELECT`, `WITH`, `EXPLAIN`, `SHOW`, `TABLE`, `VALUES`) are allowed; anything else is rejected.
+
+## Spiceworks companies browser (`/swdb-companies/<year>`)
+
+The *Spiceworks* menu lists every company with at least one detected technology for a CCID year
+(`swdb_<year>_*` tables), with server-side filtering/sorting and a per-company technology list.
+The raw tables are huge (2023: 27M companies, 231M company×technology rows, no indexes), so the page
+reads a pre-built summary table instead. Build it once per year:
+
+```bash
+python build_swdb_company_summary.py 2023            # ~40 min: creates swdb_2023_company_summary + indexes + global stats
+python build_swdb_company_summary.py 2023 --drop     # rebuild after the raw tables change
+python build_swdb_company_summary.py 2023 --stats-only
+```
+
+Then register the year in `SWDB_COMPANY_YEARS` (app.py) and add it to the navbar. Years added later
+(2024, 2025) work with the same script — optional columns such as `company_type` are picked up automatically.
 
 ## Select one entry per site
 ### Drop temp tables:

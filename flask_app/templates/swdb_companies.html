@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+
+{% block title %}Spiceworks Companies — {{ year_label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro { font-size: .9rem; color: #555; max-width: 1000px; margin-bottom: 1rem; }
+	.toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: 1rem; }
+	.toolbar .btn-sm { font-size: .8rem; padding: .4rem .75rem; }
+	.col-toggle-panel { border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; padding: .75rem 1rem; margin-bottom: 1rem; display: none; }
+	.col-toggle-panel.open { display: block; }
+	.col-toggle-grid { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; }
+	.col-toggle-grid label { font-size: .82rem; color: #444; display: flex; align-items: center; gap: .35rem; margin: 0; font-family: ui-monospace, Menlo, monospace; }
+	.stats-bar { font-size: .82rem; color: #666; margin-bottom: .5rem; }
+	.stat-card { border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; padding: .75rem 1rem; height: 100%; }
+	.stat-card .stat-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .3px; color: #777; }
+	.stat-card .stat-value { font-size: 1.25rem; font-weight: 600; color: #333; }
+	.stat-card .stat-sub { font-size: .72rem; color: #888; }
+	.stat-card.clickable { cursor: pointer; }
+	.stat-card.clickable:hover { border-color: #0d6efd; }
+	.stat-card.clickable .stat-hint { font-size: .7rem; color: #0d6efd; }
+	.cell-link { color: #2c5d8f; text-decoration: underline; cursor: pointer; }
+	#data-table, #facet-table { font-size: .84rem; }
+	#facetModal .modal-content { border: 1px solid #ddd; border-radius: 6px; box-shadow: none; }
+	.year-switch .btn { font-size: .78rem; }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+		<h4 class="mb-0">Spiceworks Companies <span class="text-muted fw-normal fs-6">{{ year_label }}</span></h4>
+		<div class="btn-group year-switch" role="group">
+			{% for y in years %}
+			<a class="btn btn-outline-secondary btn-sm {% if y.key == year %}active{% endif %}" href="{{ url_for('swdb_companies', year=y.key) }}">{{ y.label }}</a>
+			{% endfor %}
+		</div>
+	</div>
+	<p class="page-intro">
+		Every company with at least one detected technology, with firmographics, tech sizing and the number of
+		detected technologies. Filters apply server-side across the whole dataset; click a company name to see its
+		technologies, or its site count to list its sites. Click the <em>Countries</em> or <em>Industries</em> cards to see the distribution for the current filters.
+	</p>
+
+	<div class="alert alert-secondary py-2 d-none" id="banner"></div>
+
+	<div class="row g-3 mb-3">
+		<div class="col-6 col-md-4 col-xl-2">
+			<div class="stat-card">
+				<div class="stat-label">Companies</div>
+				<div class="stat-value" id="cardCompanies">–</div>
+				<div class="stat-sub" id="cardCompaniesSub"></div>
+			</div>
+		</div>
+		<div class="col-6 col-md-4 col-xl-2">
+			<div class="stat-card">
+				<div class="stat-label">Technology installs</div>
+				<div class="stat-value" id="cardInstalls">–</div>
+				<div class="stat-sub">company × technology pairs</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-4 col-xl-2">
+			<div class="stat-card">
+				<div class="stat-label">Technologies / company</div>
+				<div class="stat-value" id="cardAvgTech">–</div>
+				<div class="stat-sub" id="cardAvgTechSub"></div>
+			</div>
+		</div>
+		<div class="col-6 col-md-4 col-xl-2">
+			<div class="stat-card clickable" data-facet="company_location_country">
+				<div class="stat-label">Countries</div>
+				<div class="stat-value" id="cardCountries">–</div>
+				<div class="stat-hint">Click to list</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-4 col-xl-2">
+			<div class="stat-card clickable" data-facet="company_primary_sic4_description">
+				<div class="stat-label">Industries (SIC4)</div>
+				<div class="stat-value" id="cardIndustries">–</div>
+				<div class="stat-hint">Click to list</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-4 col-xl-2">
+			<div class="stat-card">
+				<div class="stat-label">Sites</div>
+				<div class="stat-value" id="cardSites">–</div>
+				<div class="stat-sub" id="cardEmployees"></div>
+			</div>
+		</div>
+	</div>
+
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnDownload" title="CSV of the filtered companies (max {{ '{:,}'.format(download_cap) }} rows)">Download CSV</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+		<div class="dropdown">
+			<button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">Distribution by…</button>
+			<ul class="dropdown-menu">
+				{% for f, label in facets.items() %}
+				<li><a class="dropdown-item facet-link" href="#" data-facet="{{ f }}">{{ label }}</a></li>
+				{% endfor %}
+			</ul>
+		</div>
+		<span class="text-muted small">Text filters match anywhere; prefix with <code>=</code> for an exact match. Numeric filters accept <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>.</span>
+	</div>
+
+	<div class="col-toggle-panel" id="colTogglePanel">
+		<div class="col-toggle-grid" id="colToggleGrid"></div>
+	</div>
+
+	<div class="stats-bar">
+		<strong id="rowCount">0</strong> companies match the current filters
+		<span id="loadTime" class="text-muted"></span>
+	</div>
+
+	<div id="data-table"></div>
+</div>
+
+{% include "_swdb_company_modals.html" %}
+
+<!-- Facet distribution -->
+<div class="modal fade" id="facetModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h6 class="modal-title mb-0" id="facetTitle">Distribution</h6>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div id="facetError" class="alert alert-danger d-none"></div>
+				<div class="text-muted small mb-2"><span id="facetSummary"></span> Counts reflect the current table filters. Click a row to filter the table on that value.</div>
+				<div class="d-flex gap-2 mb-2">
+					<button class="btn btn-outline-secondary btn-sm" id="btnFacetDownload">Export list (CSV)</button>
+				</div>
+				<div id="facet-table"></div>
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const dataUrl = "{{ url_for('swdb_companies_data_api', year=year) }}";
+	const downloadUrl = "{{ url_for('swdb_companies_download', year=year) }}";
+	const companyUrl = "{{ url_for('swdb_company_detail_api', year=year) }}";
+	const facetUrl = "{{ url_for('swdb_companies_facet_api', year=year) }}";
+	const statsUrl = "{{ url_for('swdb_companies_stats_api', year=year) }}";
+	const sitesUrl = "{{ url_for('swdb_company_sites_api', year=year) }}";
+	const COLUMN_META = {{ column_meta|tojson }};
+	const FACETS = {{ facets|tojson }};
+
+	const $ = (id) => document.getElementById(id);
+	const { fmt, money, escapeHtml, linkify, MONEY_COLS, showModal, buildTable } = window.swdbUtil;
+	const { openCompany, openSites } = SwdbCompanyModals.init({ companyUrl, sitesUrl, year: "{{ year }}" });
+
+	const NUM_PLACEHOLDER = {
+		company_employees: "e.g. >500", company_annual_revenue: "e.g. >1000000",
+		n_technologies: "e.g. >=10", n_vendors: "e.g. >5", n_sites: "e.g. >1",
+	};
+	const GROW = { company_name: 3, company_primary_domain: 2, company_website: 2, company_domains: 3, company_primary_sic4_description: 2, company_location_city: 1.2 };
+
+	function textCol(m) {
+		return { title: m.field, field: m.field, headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: GROW[m.field] || 1, visible: m.visible };
+	}
+	function numCol(m) {
+		return {
+			title: m.field, field: m.field, sorter: "number", hozAlign: "right", visible: m.visible, width: 130,
+			headerFilter: "input", headerFilterPlaceholder: NUM_PLACEHOLDER[m.field] || "e.g. >5",
+			formatter: (cell) => { const v = cell.getValue(); return v == null ? "" : (MONEY_COLS.has(m.field) ? money(v) : fmt(v)); },
+		};
+	}
+	const columns = COLUMN_META.map((m) => {
+		if (m.field === "company_name") {
+			return Object.assign(textCol(m), {
+				frozen: true,
+				formatter: (cell) => { const s = document.createElement("span"); s.className = "cell-link"; s.textContent = cell.getValue() || "(no name)"; return s; },
+				cellClick: (e, cell) => openCompany(cell.getRow().getData()),
+			});
+		}
+		if (m.field === "company_primary_domain" || m.field === "company_website" || m.field === "company_linkedin_link") {
+			return Object.assign(textCol(m), { formatter: (cell) => linkify(cell.getValue()) });
+		}
+		if (m.field === "company_domains") {
+			// pipe-separated list; show as individual links
+			return Object.assign(textCol(m), {
+				maxWidth: 420, tooltip: true,
+				formatter: (cell) => String(cell.getValue() || "").split("|").filter(Boolean).map(linkify).join(" · "),
+			});
+		}
+		if (m.field === "n_sites") {
+			return Object.assign(numCol(m), {
+				formatter: (cell) => { const v = cell.getValue(); const s = document.createElement("span"); s.className = "cell-link"; s.textContent = v == null ? "" : fmt(v); return s; },
+				cellClick: (e, cell) => openSites(cell.getRow().getData()),
+			});
+		}
+		return m.type === "num" ? numCol(m) : textCol(m);
+	});
+
+	function buildQuery(params) {
+		const q = new URLSearchParams();
+		if (params.page) q.set("page", params.page);
+		if (params.size) q.set("size", params.size);
+		(params.sort || []).slice(0, 1).forEach((s) => { q.set("sort", s.field); q.set("dir", s.dir); });
+		(params.filter || []).forEach((f) => { if (f.value !== "" && f.value != null) q.set("f_" + f.field, f.value); });
+		return q.toString();
+	}
+	function currentFilterQuery() {
+		const q = new URLSearchParams();
+		table.getHeaderFilters().forEach((f) => { if (f.value !== "" && f.value != null) q.set("f_" + f.field, f.value); });
+		const s = table.getSorters()[0];
+		if (s) { q.set("sort", s.field); q.set("dir", s.dir); }
+		return q;
+	}
+	function showBanner(text, cls) { const b = $("banner"); b.textContent = text; b.className = "alert py-2 " + (cls || "alert-secondary"); }
+	function hideBanner() { $("banner").classList.add("d-none"); }
+
+	const table = new Tabulator("#data-table", {
+		height: "62vh",
+		layout: "fitDataFill",
+		placeholder: "No companies match the current filters.",
+		columns: columns,
+		movableColumns: true,
+		headerSortTriState: true,
+		pagination: true,
+		paginationMode: "remote",
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		filterMode: "remote",
+		sortMode: "remote",
+		initialSort: [{ column: "n_technologies", dir: "desc" }],
+		ajaxURL: dataUrl,
+		ajaxRequestFunc: async function (url, config, params) {
+			const t0 = performance.now();
+			const res = await fetch(url + "?" + buildQuery(params));
+			const body = await res.json();
+			if (!res.ok || body.error) throw new Error(body.error || ("HTTP " + res.status));
+			hideBanner();
+			$("rowCount").textContent = fmt(body.last_row);
+			$("loadTime").textContent = ` · ${Math.round(performance.now() - t0)} ms`;
+			loadStats(params.filter || []);
+			return body;
+		},
+		dataLoaderLoading: "Loading…",
+	});
+	table.on("dataLoadError", (err) => showBanner("Failed to load data: " + (err && err.message ? err.message : err), "alert-danger"));
+
+	// Aggregates are fetched separately: on big filtered sets they can take a while and are cached server-side.
+	let statsSeq = 0;
+	async function loadStats(filters) {
+		const seq = ++statsSeq;
+		const q = new URLSearchParams();
+		filters.forEach((f) => { if (f.value !== "" && f.value != null) q.set("f_" + f.field, f.value); });
+		document.querySelectorAll(".stat-card .stat-value").forEach((el) => { if (el.closest("#companyModal") === null) el.classList.add("text-muted"); });
+		try {
+			const res = await fetch(statsUrl + "?" + q.toString());
+			const body = await res.json();
+			if (seq !== statsSeq) return;
+			if (!res.ok || body.error) throw new Error(body.error || ("HTTP " + res.status));
+			applyStats(body);
+		} catch (err) {
+			if (seq === statsSeq) $("cardCompaniesSub").textContent = "Stats unavailable: " + err.message;
+		} finally {
+			if (seq === statsSeq) document.querySelectorAll(".stat-card .stat-value").forEach((el) => el.classList.remove("text-muted"));
+		}
+	}
+
+	function applyStats(body) {
+		const s = body.stats || {};
+		const approx = s.exact_medians === false ? "≈ " : "";
+		$("cardCompanies").textContent = fmt(s.companies);
+		$("cardCompaniesSub").textContent = s.with_employees ? `${fmt(100 * s.with_employees / s.companies, 0)}% with employee data` : "";
+		$("cardInstalls").textContent = fmt(s.tech_installs);
+		$("cardAvgTech").textContent = fmt(s.avg_tech, 1);
+		$("cardAvgTechSub").textContent = s.median_tech != null ? `median ${approx}${fmt(s.median_tech)}` : "";
+		$("cardCountries").textContent = fmt(s.countries);
+		$("cardIndustries").textContent = fmt(s.industries);
+		$("cardSites").textContent = fmt(s.sites);
+		$("cardEmployees").textContent = s.median_employees != null ? `median employees ${approx}${fmt(s.median_employees)}` : "";
+	}
+
+	/* column toggles */
+	(function buildColumnToggles() {
+		const grid = $("colToggleGrid");
+		columns.forEach((c) => {
+			const label = document.createElement("label");
+			const cb = document.createElement("input");
+			cb.type = "checkbox"; cb.checked = c.visible !== false;
+			cb.addEventListener("change", () => cb.checked ? table.showColumn(c.field) : table.hideColumn(c.field));
+			label.append(cb, document.createTextNode(c.field));
+			grid.appendChild(label);
+		});
+	})();
+	$("btnToggleCols").addEventListener("click", () => $("colTogglePanel").classList.toggle("open"));
+	$("btnClearFilters").addEventListener("click", () => table.clearHeaderFilter());
+	$("btnDownload").addEventListener("click", () => { window.location = downloadUrl + "?" + currentFilterQuery().toString(); });
+
+	/* ───────── facets ───────── */
+	let facetField = null;
+	let facetTable = null;
+	async function ensureFacetTable() {
+		if (facetTable) return facetTable;
+		facetTable = await buildTable("#facet-table", {
+			height: "55vh", layout: "fitColumns", placeholder: "No values",
+			initialSort: [{ column: "companies", dir: "desc" }],
+			columns: [
+				{ title: "Value", field: "value", headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: 3 },
+				{ title: "Companies", field: "companies", sorter: "number", hozAlign: "right", minWidth: 120, formatter: (c) => fmt(c.getValue()) },
+				{ title: "Tech installs", field: "tech_installs", sorter: "number", hozAlign: "right", minWidth: 120, formatter: (c) => fmt(c.getValue()) },
+				{ title: "Avg tech / co.", field: "avg_tech", sorter: "number", hozAlign: "right", minWidth: 110, formatter: (c) => fmt(c.getValue(), 1) },
+			],
+		});
+		facetTable.on("rowClick", (e, row) => {
+			if (!facetField) return;
+			const v = row.getData().value;
+			table.setHeaderFilterValue(facetField, v === "(blank)" ? "=" : "=" + v);
+			bootstrap.Modal.getOrCreateInstance($("facetModal")).hide();
+		});
+		return facetTable;
+	}
+	$("btnFacetDownload").addEventListener("click", () => { if (facetTable) facetTable.download("csv", `swdb_{{ year }}_${facetField}.csv`); });
+
+	async function openFacet(field) {
+		facetField = field;
+		$("facetTitle").textContent = FACETS[field] || field;
+		$("facetSummary").textContent = "Loading…";
+		$("facetError").classList.add("d-none");
+		const q = currentFilterQuery(); q.set("field", field);
+		const pending = fetch(facetUrl + "?" + q.toString());
+		await showModal($("facetModal"));
+		const facetTable = await ensureFacetTable();
+		facetTable.clearData();
+		try {
+			const res = await pending;
+			const body = await res.json();
+			if (!res.ok || body.error) throw new Error(body.error || ("HTTP " + res.status));
+			facetTable.setData(body.rows);
+			$("facetSummary").textContent = `${fmt(body.rows.length)} distinct values${body.rows.length >= 2000 ? " (top 2,000 shown)" : ""}.`;
+		} catch (err) {
+			$("facetError").textContent = err.message; $("facetError").classList.remove("d-none");
+			$("facetSummary").textContent = "";
+		}
+	}
+	document.querySelectorAll(".stat-card.clickable").forEach((c) => c.addEventListener("click", () => openFacet(c.dataset.facet)));
+	document.querySelectorAll(".facet-link").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openFacet(a.dataset.facet); }));
+
+});
+</script>
+{% endblock %}

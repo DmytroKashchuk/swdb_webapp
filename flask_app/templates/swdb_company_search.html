@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Company Search — {{ year_label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro { font-size: .9rem; color: #555; max-width: 1000px; margin-bottom: 1rem; }
+	.search-panel { border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; padding: 1rem 1rem .5rem; margin-bottom: 1rem; }
+	.search-panel .form-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .3px; color: #777; margin-bottom: .15rem; font-family: ui-monospace, Menlo, monospace; }
+	.search-panel .form-control, .search-panel .form-select { font-size: .85rem; }
+	.search-panel .hint { font-size: .72rem; color: #999; }
+	.search-panel .na { opacity: .5; }
+	.toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: .75rem; }
+	.toolbar .btn-sm { font-size: .8rem; padding: .4rem .75rem; }
+	.col-toggle-panel { border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; padding: .75rem 1rem; margin-bottom: 1rem; display: none; }
+	.col-toggle-panel.open { display: block; }
+	.col-toggle-grid { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; }
+	.col-toggle-grid label { font-size: .82rem; color: #444; display: flex; align-items: center; gap: .35rem; margin: 0; font-family: ui-monospace, Menlo, monospace; }
+	.stats-bar { font-size: .82rem; color: #666; margin-bottom: .5rem; }
+	.cell-link { color: #2c5d8f; text-decoration: underline; cursor: pointer; }
+	#data-table { font-size: .84rem; }
+	.year-switch .btn { font-size: .78rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+		<h4 class="mb-0">Company Search <span class="text-muted fw-normal fs-6">{{ year_label }}</span></h4>
+		<div class="d-flex gap-2 align-items-center">
+			<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('swdb_companies', year=year) }}">Browse all companies</a>
+			<div class="btn-group year-switch" role="group">
+				{% for y in years %}
+				<a class="btn btn-outline-secondary btn-sm {% if y.key == year %}active{% endif %}" href="{{ url_for('swdb_company_search', year=y.key) }}">{{ y.label }}</a>
+				{% endfor %}
+			</div>
+		</div>
+	</div>
+	<p class="page-intro">
+		Fill in one or more fields and press <strong>Search</strong>. Companies with at least one detected technology are returned
+		(most technologies first, up to {{ "{:,}".format(max_rows) }}). Click a company name to see its technologies, or its
+		site count to list its sites.
+	</p>
+
+	<form class="search-panel" id="searchForm" autocomplete="off">
+		<div class="row g-3">
+			{% for f in fields %}
+			<div class="col-6 col-md-4 col-xl-3 {% if not f.available %}na{% endif %}">
+				<label class="form-label" for="f-{{ f.field }}">{{ f.field | replace("company_", "") | replace("_", " ") }}</label>
+				{% if not f.available %}
+					<input class="form-control form-control-sm" id="f-{{ f.field }}" disabled placeholder="not in this year's data">
+				{% elif f.kind == "int" %}
+					<div class="input-group input-group-sm">
+						<input type="text" inputmode="numeric" class="form-control" name="{{ f.field }}_min" placeholder="min">
+						<input type="text" inputmode="numeric" class="form-control" name="{{ f.field }}_max" placeholder="max">
+					</div>
+				{% elif f.kind == "enum" %}
+					<select class="form-select form-select-sm" name="{{ f.field }}" id="f-{{ f.field }}">
+						<option value="">any</option>
+						{% for o in f.options %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+					</select>
+				{% else %}
+					<input type="text" class="form-control form-control-sm" name="{{ f.field }}" id="f-{{ f.field }}">
+				{% endif %}
+			</div>
+			{% endfor %}
+		</div>
+		<div class="d-flex flex-wrap align-items-center gap-3 mt-3 mb-2">
+			<button type="submit" class="btn btn-primary btn-sm" id="btnSearch">Search</button>
+			<button type="button" class="btn btn-outline-secondary btn-sm" id="btnReset">Reset</button>
+			<div class="form-check form-check-inline mb-0">
+				<input class="form-check-input" type="checkbox" id="exactMatch" name="exact" value="1">
+				<label class="form-check-label small" for="exactMatch">Exact match for text fields</label>
+			</div>
+			<span class="hint">Text fields match anywhere (case-insensitive) unless “exact” is on. Location type: BRA=Branch, SLS=Single-location subsidiary, SHQ=Subsidiary HQ, STA=Standalone, UHQ=Ultimate HQ. Region: NA=North America.</span>
+		</div>
+	</form>
+
+	<div class="alert alert-danger py-2 d-none" id="searchError"></div>
+
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols" disabled>Show / Hide Columns</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnDownload" disabled>Download CSV</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters" disabled>Clear Table Filters</button>
+		<span class="stats-bar mb-0" id="resultStats">No search yet.</span>
+	</div>
+
+	<div class="col-toggle-panel" id="colTogglePanel"><div class="col-toggle-grid" id="colToggleGrid"></div></div>
+
+	<div id="data-table"></div>
+</div>
+
+{% include "_swdb_company_modals.html" %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const searchUrl = "{{ url_for('swdb_company_search_api', year=year) }}";
+	const companyUrl = "{{ url_for('swdb_company_detail_api', year=year) }}";
+	const sitesUrl = "{{ url_for('swdb_company_sites_api', year=year) }}";
+	const $ = (id) => document.getElementById(id);
+	const { fmt, money, escapeHtml, linkify, MONEY_COLS, showModal, buildTable } = window.swdbUtil;
+	const { openCompany, openSites } = SwdbCompanyModals.init({ companyUrl, sitesUrl, year: "{{ year }}" });
+
+	const NUM_COLS = new Set(["company_employees", "company_annual_revenue", "company_location_domestic_hq", "company_public", "n_technologies", "n_vendors", "n_sites"]);
+	const GROW = { company_name: 3, company_primary_domain: 2, company_website: 2, company_domains: 3, company_primary_sic4_description: 2 };
+	const HIDDEN = new Set(["company_website", "company_location_legal_status", "company_location_domestic_hq", "company_stock_symbol", "company_start_year"]);
+
+	function numericFilter(h, v) {
+		if (h === "" || h == null) return true;
+		if (v == null || v === "") return false;
+		const m = String(h).trim().match(/^(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)$/);
+		if (!m) return true;
+		const op = m[1] || "=", t = parseFloat(m[2]), x = parseFloat(v);
+		return op === "<" ? x < t : op === ">" ? x > t : op === "<=" ? x <= t : op === ">=" ? x >= t : x === t;
+	}
+
+	function buildColumns(names) {
+		return names.map((f) => {
+			const col = { title: f, field: f, headerFilter: "input", headerFilterPlaceholder: "Filter…", widthGrow: GROW[f] || 1, visible: !HIDDEN.has(f) };
+			if (NUM_COLS.has(f)) Object.assign(col, { sorter: "number", hozAlign: "right", width: 130, headerFilterPlaceholder: "e.g. >100", headerFilterFunc: numericFilter,
+				formatter: (c) => { const v = c.getValue(); return v == null ? "" : (MONEY_COLS.has(f) ? money(v) : fmt(v)); } });
+			if (f === "company_name") Object.assign(col, { frozen: true,
+				formatter: (c) => { const s = document.createElement("span"); s.className = "cell-link"; s.textContent = c.getValue() || "(no name)"; return s; },
+				cellClick: (e, c) => openCompany(c.getRow().getData()) });
+			if (f === "n_sites") Object.assign(col, {
+				formatter: (c) => { const v = c.getValue(); const s = document.createElement("span"); s.className = "cell-link"; s.textContent = v == null ? "" : fmt(v); return s; },
+				cellClick: (e, c) => openSites(c.getRow().getData()) });
+			if (f === "company_primary_domain" || f === "company_website") col.formatter = (c) => linkify(c.getValue());
+			if (f === "company_domains") Object.assign(col, { maxWidth: 420, formatter: (c) => String(c.getValue() || "").split("|").filter(Boolean).map(linkify).join(" · ") });
+			return col;
+		});
+	}
+
+	let table = null;
+	async function ensureTable() {
+		if (table) return table;
+		table = await buildTable("#data-table", {
+			height: "60vh", layout: "fitDataFill", placeholder: "Enter criteria above and press Search.",
+			pagination: true, paginationSize: 50, paginationSizeSelector: [25, 50, 100, 250, 500],
+			movableColumns: true, headerSortTriState: true, columns: [], data: [],
+		});
+		return table;
+	}
+
+	function buildToggles(names) {
+		const grid = $("colToggleGrid"); grid.innerHTML = "";
+		names.forEach((f) => {
+			const label = document.createElement("label"); const cb = document.createElement("input");
+			cb.type = "checkbox"; cb.checked = !HIDDEN.has(f);
+			cb.addEventListener("change", () => cb.checked ? table.showColumn(f) : table.hideColumn(f));
+			label.append(cb, document.createTextNode(f)); grid.appendChild(label);
+		});
+	}
+
+	let lastColumns = "";
+	async function runSearch(e) {
+		if (e) e.preventDefault();
+		const params = new URLSearchParams();
+		new FormData($("searchForm")).forEach((v, k) => { if (String(v).trim() !== "") params.set(k, String(v).trim()); });
+		$("searchError").classList.add("d-none");
+		if ([...params.keys()].filter((k) => k !== "exact").length === 0) {
+			$("searchError").textContent = "Enter at least one search criterion."; $("searchError").classList.remove("d-none"); return;
+		}
+		$("btnSearch").disabled = true; $("btnSearch").textContent = "Searching…";
+		$("resultStats").textContent = "Searching…";
+		try {
+			const res = await fetch(searchUrl + "?" + params.toString());
+			const body = await res.json();
+			if (!res.ok || body.error) throw new Error(body.error || ("HTTP " + res.status));
+			const t = await ensureTable();
+			const colsKey = body.columns.join(",");
+			if (colsKey !== lastColumns) { t.setColumns(buildColumns(body.columns)); buildToggles(body.columns); lastColumns = colsKey; }
+			await t.setData(body.rows);
+			["btnToggleCols", "btnDownload", "btnClearFilters"].forEach((id) => $(id).disabled = !body.rows.length);
+			let txt = `<strong>${fmt(body.returned)}</strong> compan${body.returned === 1 ? "y" : "ies"} shown`;
+			if (body.total > body.returned) txt += ` of ${body.total_capped ? "more than " : ""}${fmt(body.total)} matching — refine the criteria to see the rest`;
+			$("resultStats").innerHTML = txt + ` · ${fmt(body.elapsed_ms)} ms`;
+			history.replaceState(null, "", "?" + params.toString());
+		} catch (err) {
+			$("searchError").textContent = err.message; $("searchError").classList.remove("d-none");
+			$("resultStats").textContent = "Search failed.";
+		} finally {
+			$("btnSearch").disabled = false; $("btnSearch").textContent = "Search";
+		}
+	}
+
+	$("searchForm").addEventListener("submit", runSearch);
+	$("btnReset").addEventListener("click", () => { $("searchForm").reset(); history.replaceState(null, "", location.pathname); });
+	$("btnToggleCols").addEventListener("click", () => $("colTogglePanel").classList.toggle("open"));
+	$("btnClearFilters").addEventListener("click", () => table && table.clearHeaderFilter());
+	$("btnDownload").addEventListener("click", () => table && table.download("csv", `swdb_{{ year }}_company_search.csv`));
+
+	// Restore a shared/bookmarked search from the URL and run it.
+	const initial = new URLSearchParams(location.search);
+	if ([...initial.keys()].length) {
+		initial.forEach((v, k) => { const el = $("searchForm").elements[k]; if (el) { if (el.type === "checkbox") el.checked = v === "1"; else el.value = v; } });
+		runSearch();
+	}
+});
+</script>
+{% endblock %}

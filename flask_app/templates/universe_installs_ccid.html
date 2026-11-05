@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — General Info{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro { font-size: .9rem; color: #555; max-width: 900px; margin-bottom: 1.25rem; }
+	.toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: 1rem; }
+	.toolbar .btn-sm { font-size: .8rem; padding: .4rem .75rem; }
+	.col-toggle-panel {
+		border: 1px solid #e0e0e0; border-radius: 6px; background: #fff;
+		padding: .75rem 1rem; margin-bottom: 1rem; display: none;
+	}
+	.col-toggle-panel.open { display: block; }
+	.col-toggle-grid { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; }
+	.col-toggle-grid label { font-size: .82rem; color: #444; display: flex; align-items: center; gap: .35rem; margin: 0; }
+	.stats-bar { font-size: .82rem; color: #666; margin-bottom: .5rem; }
+
+	.stat-card {
+		border: 1px solid #e0e0e0; border-radius: 6px; background: #fff;
+		padding: .75rem 1rem; height: 100%;
+	}
+	.stat-card .stat-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .3px; color: #777; }
+	.stat-card .stat-value { font-size: 1.25rem; font-weight: 600; color: #333; }
+	.stat-card.clickable { cursor: pointer; }
+	.stat-card.clickable:hover { border-color: #0d6efd; }
+	.stat-card.clickable .stat-hint { font-size: .7rem; color: #0d6efd; }
+
+	#facetModal .modal-content { border: 1px solid #ddd; border-radius: 6px; box-shadow: none; }
+	#facetModal .modal-body { display: flex; flex-direction: column; gap: .6rem; }
+	#facetModal .hint { font-size: .78rem; color: #666; }
+	#facet-table { font-size: .83rem; }
+	#facet-table .tabulator-row { cursor: pointer; }
+	#data-table { font-size: .85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-3">{{ title }}</h4>
+
+	{% if description %}
+	<p class="page-intro">{{ description }}</p>
+	{% endif %}
+
+	<div class="row g-3 mb-3">
+		<div class="col-6 col-md">
+			<div class="stat-card">
+				<div class="stat-label">Technologies</div>
+				<div class="stat-value" id="card-count">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md">
+			<div class="stat-card clickable" data-facet="tech_vendor" data-title="Vendors">
+				<div class="stat-label">Vendors</div>
+				<div class="stat-value" id="card-tech_vendor">0</div>
+				<div class="stat-hint">Click to list</div>
+			</div>
+		</div>
+		<div class="col-6 col-md">
+			<div class="stat-card clickable" data-facet="tech_category" data-title="Categories">
+				<div class="stat-label">Categories</div>
+				<div class="stat-value" id="card-tech_category">0</div>
+				<div class="stat-hint">Click to list</div>
+			</div>
+		</div>
+		<div class="col-6 col-md">
+			<div class="stat-card clickable" data-facet="tech_series" data-title="Series">
+				<div class="stat-label">Series</div>
+				<div class="stat-value" id="card-tech_series">0</div>
+				<div class="stat-hint">Click to list</div>
+			</div>
+		</div>
+		<div class="col-6 col-md">
+			<div class="stat-card">
+				<div class="stat-label">Total Installs</div>
+				<div class="stat-value" id="card-installs">0</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download CSV</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+	</div>
+
+	<div class="col-toggle-panel" id="colTogglePanel">
+		<div class="col-toggle-grid" id="colToggleGrid"></div>
+	</div>
+
+	<div class="stats-bar">
+		Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> technologies
+	</div>
+
+	<div id="data-table"></div>
+</div>
+
+<!-- Unique values dialog (vendors / categories / series) -->
+<div class="modal fade" id="facetModal" tabindex="-1" aria-labelledby="facetTitle" aria-hidden="true">
+	<div class="modal-dialog modal-dialog-centered modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h6 class="modal-title mb-0" id="facetTitle">Values</h6>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div class="hint">
+					<span id="facetSummary"></span> — counts reflect the current table filters.
+					Click a row to filter the table on that value.
+				</div>
+				<div class="d-flex gap-2">
+					<button class="btn btn-outline-secondary btn-sm" id="btnFacetDownload">Export list (CSV)</button>
+					<button class="btn btn-outline-secondary btn-sm" id="btnFacetClear">Clear this filter</button>
+				</div>
+				<div id="facet-table"></div>
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const apiUrl = "{{ url_for('general_info_api', slug=slug) }}";
+	const fileName = "{{ slug }}.csv";
+	const FACETS = ["tech_vendor", "tech_category", "tech_series"];
+	let allData = [];
+	let colMeta = [];
+	let currentFacet = null;
+
+	function fmt(n) { return Number(n || 0).toLocaleString(); }
+
+	// Numeric header filter supporting <, >, <=, >=, = operators (e.g. ">100")
+	function numericFilter(headerValue, rowValue) {
+		if (headerValue === "" || headerValue === null || headerValue === undefined) return true;
+		if (rowValue === null || rowValue === undefined || rowValue === "") return false;
+		const m = String(headerValue).trim().match(/^(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)$/);
+		if (!m) return true;
+		const op = m[1] || "=";
+		const target = parseFloat(m[2]);
+		const val = parseFloat(rowValue);
+		if (isNaN(val)) return false;
+		switch (op) {
+			case "<": return val < target;
+			case ">": return val > target;
+			case "<=": return val <= target;
+			case ">=": return val >= target;
+			default: return val === target;
+		}
+	}
+
+	// Text header filter: "contains" by default, exact match when prefixed with "="
+	function textFilter(headerValue, rowValue) {
+		if (headerValue === "" || headerValue === null || headerValue === undefined) return true;
+		const h = String(headerValue);
+		const v = rowValue === null || rowValue === undefined ? "" : String(rowValue);
+		if (h.startsWith("=")) return v === h.slice(1);
+		return v.toLowerCase().includes(h.toLowerCase());
+	}
+
+	function buildColumns(meta) {
+		return meta.map(function (c) {
+			if (c.numeric) {
+				return {
+					title: c.field, field: c.field, sorter: "number",
+					headerFilter: "input", headerFilterPlaceholder: "e.g. >100",
+					headerFilterFunc: numericFilter,
+					formatter: function (cell) {
+						const v = cell.getValue();
+						return (v === null || v === undefined || v === "") ? "" : fmt(v);
+					},
+				};
+			}
+			const col = {
+				title: c.field, field: c.field,
+				headerFilter: "input", headerFilterPlaceholder: "Search… (=exact)",
+				headerFilterFunc: textFilter,
+			};
+			if (c.field === "tech_url" || c.field === "tech_vendor_url") {
+				col.formatter = "link";
+				col.formatterParams = {
+					target: "_blank",
+					url: function (cell) {
+						const v = cell.getValue();
+						return v && !/^https?:\/\//i.test(v) ? "https://" + v : v;
+					},
+				};
+			}
+			return col;
+		});
+	}
+
+	const table = new Tabulator("#data-table", {
+		height: "62vh",
+		layout: "fitDataFill",
+		placeholder: "Loading data…",
+		pagination: true,
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		movableColumns: true,
+		headerSortTriState: true,
+	});
+
+	const facetTable = new Tabulator("#facet-table", {
+		height: "60vh",
+		layout: "fitColumns",
+		placeholder: "No values",
+		headerSortTriState: true,
+		initialSort: [{ column: "installs", dir: "desc" }],
+		columns: [
+			{ title: "Value", field: "value", headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: 3 },
+			{ title: "Technologies", field: "count", sorter: "number", hozAlign: "right", minWidth: 120,
+			  formatter: function (c) { return fmt(c.getValue()); } },
+			{ title: "Installs", field: "installs", sorter: "number", hozAlign: "right", minWidth: 120,
+			  formatter: function (c) { return fmt(c.getValue()); } },
+		],
+	});
+
+	function activeRows() {
+		return table.getRows("active").map(function (r) { return r.getData(); });
+	}
+
+	function facetStats(rows, field) {
+		const map = new Map();
+		rows.forEach(function (r) {
+			const raw = r[field];
+			const v = (raw === null || raw === undefined || String(raw).trim() === "") ? "(blank)" : String(raw);
+			const e = map.get(v) || { value: v, count: 0, installs: 0 };
+			e.count += 1;
+			e.installs += Number(r.n_installs) || 0;
+			map.set(v, e);
+		});
+		return Array.from(map.values());
+	}
+
+	function refreshStats() {
+		const rows = activeRows();
+		document.getElementById("rowCount").textContent = fmt(rows.length);
+		document.getElementById("totalCount").textContent = fmt(allData.length);
+		document.getElementById("card-count").textContent = fmt(rows.length);
+		document.getElementById("card-installs").textContent =
+			fmt(rows.reduce(function (a, r) { return a + (Number(r.n_installs) || 0); }, 0));
+		FACETS.forEach(function (f) {
+			const distinct = new Set(rows.map(function (r) { return r[f]; })
+				.filter(function (v) { return v !== null && v !== undefined && String(v).trim() !== ""; }));
+			document.getElementById("card-" + f).textContent = fmt(distinct.size);
+		});
+		if (currentFacet) refreshFacetPanel();
+	}
+
+	function refreshFacetPanel() {
+		const stats = facetStats(activeRows(), currentFacet.field);
+		facetTable.setData(stats);
+		const installs = stats.reduce(function (a, s) { return a + s.installs; }, 0);
+		const blank = stats.find(function (s) { return s.value === "(blank)"; });
+		const unique = stats.length - (blank ? 1 : 0);
+		document.getElementById("facetSummary").textContent =
+			fmt(unique) + " unique " + currentFacet.title.toLowerCase() +
+			(blank ? " (+ " + fmt(blank.count) + " blank)" : "") + " · " + fmt(installs) + " installs";
+	}
+
+	function openFacet(field, title) {
+		currentFacet = { field: field, title: title };
+		document.getElementById("facetTitle").textContent = title;
+		refreshFacetPanel();
+		bootstrap.Modal.getOrCreateInstance(document.getElementById("facetModal")).show();
+	}
+
+	document.getElementById("facetModal").addEventListener("shown.bs.modal", function () {
+		facetTable.redraw(true);
+	});
+
+	document.querySelectorAll(".stat-card.clickable").forEach(function (card) {
+		card.addEventListener("click", function () {
+			openFacet(card.dataset.facet, card.dataset.title);
+		});
+	});
+
+	facetTable.on("rowClick", function (e, row) {
+		if (!currentFacet) return;
+		const v = row.getData().value;
+		table.setHeaderFilterValue(currentFacet.field, v === "(blank)" ? "=" : "=" + v);
+		bootstrap.Modal.getOrCreateInstance(document.getElementById("facetModal")).hide();
+	});
+
+	document.getElementById("btnFacetClear").addEventListener("click", function () {
+		if (currentFacet) table.setHeaderFilterValue(currentFacet.field, "");
+	});
+	document.getElementById("btnFacetDownload").addEventListener("click", function () {
+		if (currentFacet) facetTable.download("csv", "{{ slug }}_" + currentFacet.field + ".csv");
+	});
+
+	function buildColumnToggles() {
+		const grid = document.getElementById("colToggleGrid");
+		grid.innerHTML = "";
+		colMeta.forEach(function (c) {
+			const label = document.createElement("label");
+			const cb = document.createElement("input");
+			cb.type = "checkbox";
+			cb.checked = true;
+			cb.addEventListener("change", function () {
+				if (cb.checked) table.showColumn(c.field); else table.hideColumn(c.field);
+			});
+			label.appendChild(cb);
+			label.appendChild(document.createTextNode(c.field));
+			grid.appendChild(label);
+		});
+	}
+
+	table.on("dataFiltered", function () { setTimeout(refreshStats, 0); });
+
+	fetch(apiUrl)
+		.then(function (res) { return res.json(); })
+		.then(function (data) {
+			if (data.error) {
+				document.getElementById("data-table").innerHTML =
+					'<div class="alert alert-danger">' + data.error + "</div>";
+				return;
+			}
+			colMeta = data.columns;
+			allData = data.rows;
+			table.setColumns(buildColumns(colMeta));
+			table.setData(allData).then(function () {
+				if (colMeta.some(function (c) { return c.field === "n_installs"; })) {
+					table.setSort("n_installs", "desc");
+				}
+				buildColumnToggles();
+				refreshStats();
+			});
+		})
+		.catch(function (err) {
+			document.getElementById("data-table").innerHTML =
+				'<div class="alert alert-danger">Failed to load data: ' + err + "</div>";
+		});
+
+	document.getElementById("btnToggleCols").addEventListener("click", function () {
+		document.getElementById("colTogglePanel").classList.toggle("open");
+	});
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		table.download("csv", fileName);
+	});
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		table.clearFilter(true);
+		table.clearHeaderFilter();
+	});
+});
+</script>
+{% endblock %}

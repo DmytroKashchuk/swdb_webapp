@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block title %}Domain Names{% endblock %}
+
+{% block extra_head %}
+<style>
+	.page-intro {
+		font-size: .9rem;
+		color: #555;
+		max-width: 900px;
+		margin-bottom: 1.25rem;
+	}
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .6rem;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+	.toolbar .btn-sm {
+		font-size: .8rem;
+		padding: .4rem .75rem;
+	}
+	.toolbar .btn-check:checked + .btn {
+		background: #e9ecef;
+		color: #333;
+		border-color: #adb5bd;
+	}
+	.col-toggle-panel {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		margin-bottom: 1rem;
+		display: none;
+	}
+	.col-toggle-panel.open {
+		display: block;
+	}
+	.col-toggle-grid {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .35rem 1.25rem;
+	}
+	.col-toggle-grid label {
+		font-size: .82rem;
+		color: #444;
+		display: flex;
+		align-items: center;
+		gap: .35rem;
+		margin: 0;
+	}
+	.stats-bar {
+		font-size: .82rem;
+		color: #666;
+		margin-bottom: .5rem;
+	}
+	.stat-card {
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #fff;
+		padding: .75rem 1rem;
+		height: 100%;
+	}
+	.stat-card .stat-label {
+		font-size: .72rem;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		color: #777;
+	}
+	.stat-card .stat-value {
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: #333;
+	}
+	.stat-card .stat-sub {
+		font-size: .72rem;
+		color: #888;
+	}
+	#data-table {
+		font-size: .85rem;
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-2">Domain Names</h4>
+	<p class="page-intro">
+		Domains found in the SWDB <strong>accounts</strong> (<code>account_url</code>) and <strong>sites</strong>
+		(<code>site_url</code>) tables, joined on the domain name. The <em>presence</em> column tells whether a
+		domain appears in both lists, only in accounts, or only in sites; the <em>In accounts</em> / <em>In sites</em>
+		filters show every domain of one list (its own plus the shared ones). Cards update with the table filters.
+	</p>
+
+	<div class="alert alert-danger py-2 d-none" id="errorBanner"></div>
+
+	<div class="row g-3 mb-3">
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Domains</div>
+				<div class="stat-value" id="cardDomains">0</div>
+				<div class="stat-sub" id="cardDomainsSub"></div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">In accounts</div>
+				<div class="stat-value" id="cardInAccounts">0</div>
+				<div class="stat-sub" id="cardInAccountsSub"></div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">In sites</div>
+				<div class="stat-value" id="cardInSites">0</div>
+				<div class="stat-sub" id="cardInSitesSub"></div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">In both</div>
+				<div class="stat-value" id="cardBoth">0</div>
+				<div class="stat-sub" id="cardBothSub"></div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Accounts only</div>
+				<div class="stat-value" id="cardAccountsOnly">0</div>
+				<div class="stat-sub" id="cardAccountsOnlySub"></div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Sites only</div>
+				<div class="stat-value" id="cardSitesOnly">0</div>
+				<div class="stat-sub" id="cardSitesOnlySub"></div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Total accounts</div>
+				<div class="stat-value" id="cardTotalAccounts">0</div>
+			</div>
+		</div>
+		<div class="col-6 col-md-3">
+			<div class="stat-card">
+				<div class="stat-label">Total sites</div>
+				<div class="stat-value" id="cardTotalSites">0</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="toolbar">
+		<div class="btn-group btn-group-sm" role="group" aria-label="Presence filter" id="presenceGroup">
+			<input type="radio" class="btn-check" name="presence" id="presenceAll" value="" checked>
+			<label class="btn btn-outline-secondary" for="presenceAll">All</label>
+			{% for p in presence %}
+			<input type="radio" class="btn-check" name="presence" id="presence{{ loop.index }}" value="{{ p }}">
+			<label class="btn btn-outline-secondary" for="presence{{ loop.index }}">{{ p }}</label>
+			{% endfor %}
+		</div>
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show / Hide Columns</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download CSV</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+	</div>
+
+	<div class="col-toggle-panel" id="colTogglePanel">
+		<div class="col-toggle-grid" id="colToggleGrid"></div>
+	</div>
+
+	<div class="stats-bar">
+		Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> domains
+	</div>
+
+	<div id="data-table"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const dataUrl = "{{ url_for('domain_names_data_api') }}";
+	const downloadUrl = "{{ url_for('domain_names_download') }}";
+	const PRESENCE = {{ presence|tojson }};
+
+	function fmt(n) { return Number(n || 0).toLocaleString(); }
+	function pct(part, whole) { return whole ? (100 * part / whole).toFixed(1) + "%" : ""; }
+
+	function numFormatter(cell) {
+		const v = cell.getValue();
+		return (v === null || v === undefined || v === "") ? "" : Number(v).toLocaleString();
+	}
+
+	const presenceValues = { "": "All" };
+	PRESENCE.forEach(function (p) { presenceValues[p] = p; });
+
+	const columns = [
+		{ title: "domain", field: "domain", headerFilter: "input", headerFilterPlaceholder: "Search…", widthGrow: 3 },
+		{
+			title: "presence", field: "presence", width: 160,
+			headerFilter: "list", headerFilterParams: { values: presenceValues, clearable: true },
+		},
+		{
+			title: "total_accounts", field: "total_accounts", sorter: "number", hozAlign: "right", width: 150,
+			headerFilter: "input", headerFilterPlaceholder: "e.g. >1", formatter: numFormatter,
+		},
+		{
+			title: "total_sites", field: "total_sites", sorter: "number", hozAlign: "right", width: 150,
+			headerFilter: "input", headerFilterPlaceholder: "e.g. >1", formatter: numFormatter,
+		},
+	];
+
+	function buildQuery(params) {
+		const q = new URLSearchParams();
+		if (params.page) q.set("page", params.page);
+		if (params.size) q.set("size", params.size);
+		(params.sort || []).slice(0, 1).forEach(function (s) {
+			q.set("sort", s.field);
+			q.set("dir", s.dir);
+		});
+		(params.filter || []).forEach(function (f) {
+			if (f.value !== "" && f.value !== null && f.value !== undefined) q.set("f_" + f.field, f.value);
+		});
+		return q.toString();
+	}
+
+	function showError(text) {
+		const b = document.getElementById("errorBanner");
+		b.textContent = text;
+		b.classList.remove("d-none");
+	}
+	function hideError() { document.getElementById("errorBanner").classList.add("d-none"); }
+
+	const table = new Tabulator("#data-table", {
+		height: "62vh",
+		layout: "fitColumns",
+		placeholder: "No domains match the current filters.",
+		columns: columns,
+		movableColumns: true,
+		headerSortTriState: true,
+		initialSort: [{ column: "domain", dir: "asc" }],
+		pagination: true,
+		paginationMode: "remote",
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		filterMode: "remote",
+		sortMode: "remote",
+		ajaxURL: dataUrl,
+		ajaxRequestFunc: function (url, config, params) {
+			return fetch(url + "?" + buildQuery(params))
+				.then(function (res) { return res.json().then(function (body) { return { res: res, body: body }; }); })
+				.then(function (r) {
+					if (!r.res.ok || r.body.error) throw new Error(r.body.error || ("HTTP " + r.res.status));
+					hideError();
+					applyStats(r.body);
+					return r.body;
+				});
+		},
+		dataLoaderLoading: "Loading…",
+	});
+
+	table.on("dataLoadError", function (err) {
+		showError("Failed to load data: " + (err && err.message ? err.message : err));
+	});
+
+	function applyStats(body) {
+		const s = body.stats || {};
+		document.getElementById("rowCount").textContent = fmt(body.last_row);
+		document.getElementById("totalCount").textContent = fmt(body.total_all);
+
+		document.getElementById("cardDomains").textContent = fmt(s.domains);
+		document.getElementById("cardDomainsSub").textContent = pct(s.domains, body.total_all) + (body.total_all ? " of all domains" : "");
+		document.getElementById("cardInAccounts").textContent = fmt(s.in_accounts);
+		document.getElementById("cardInAccountsSub").textContent = pct(s.in_accounts, s.domains);
+		document.getElementById("cardInSites").textContent = fmt(s.in_sites);
+		document.getElementById("cardInSitesSub").textContent = pct(s.in_sites, s.domains);
+		document.getElementById("cardBoth").textContent = fmt(s.both);
+		document.getElementById("cardBothSub").textContent = pct(s.both, s.domains);
+		document.getElementById("cardAccountsOnly").textContent = fmt(s.accounts_only);
+		document.getElementById("cardAccountsOnlySub").textContent = pct(s.accounts_only, s.domains);
+		document.getElementById("cardSitesOnly").textContent = fmt(s.sites_only);
+		document.getElementById("cardSitesOnlySub").textContent = pct(s.sites_only, s.domains);
+		document.getElementById("cardTotalAccounts").textContent = fmt(s.total_accounts);
+		document.getElementById("cardTotalSites").textContent = fmt(s.total_sites);
+
+		// Keep the quick-filter buttons in sync with the presence header filter.
+		const current = (table.getHeaderFilters().find(function (f) { return f.field === "presence"; }) || {}).value || "";
+		const radio = document.querySelector('#presenceGroup input[value="' + current + '"]');
+		if (radio && !radio.checked) radio.checked = true;
+	}
+
+	document.querySelectorAll('#presenceGroup input[name="presence"]').forEach(function (radio) {
+		radio.addEventListener("change", function () {
+			table.setHeaderFilterValue("presence", radio.value);
+		});
+	});
+
+	function buildColumnToggles() {
+		const grid = document.getElementById("colToggleGrid");
+		columns.forEach(function (c) {
+			const label = document.createElement("label");
+			const cb = document.createElement("input");
+			cb.type = "checkbox";
+			cb.checked = true;
+			cb.addEventListener("change", function () {
+				if (cb.checked) table.showColumn(c.field);
+				else table.hideColumn(c.field);
+			});
+			label.appendChild(cb);
+			label.appendChild(document.createTextNode(c.field));
+			grid.appendChild(label);
+		});
+	}
+	buildColumnToggles();
+
+	document.getElementById("btnToggleCols").addEventListener("click", function () {
+		document.getElementById("colTogglePanel").classList.toggle("open");
+	});
+
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		table.clearHeaderFilter();
+		document.getElementById("presenceAll").checked = true;
+	});
+
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		const params = { filter: table.getHeaderFilters(), sort: table.getSorters() };
+		window.location.href = downloadUrl + "?" + buildQuery(params);
+	});
+});
+</script>
+{% endblock %}
