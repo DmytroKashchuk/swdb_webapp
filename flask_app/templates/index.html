@@ -16,42 +16,6 @@
 	}
 	.panel-body { padding: .75rem .9rem; }
 
-	/* ── Schema browser ── */
-	#schema-panel { position: sticky; top: 1rem; }
-	#schema-list { max-height: calc(100vh - 190px); overflow-y: auto; font-size: .82rem; }
-	.schema-group-head {
-		display: flex; align-items: center; justify-content: space-between;
-		padding: .4rem .9rem; cursor: pointer; user-select: none;
-		font-weight: 600; color: #333; border-bottom: 1px solid #f1f1f1;
-	}
-	.schema-group-head:hover { background: #f7f7f9; }
-	.schema-group-head .count { font-weight: 400; color: #888; font-size: .75rem; }
-	.schema-group.collapsed .schema-group-body { display: none; }
-	.schema-table {
-		display: flex; align-items: center; gap: .35rem;
-		padding: .3rem .9rem .3rem 1.4rem; border-bottom: 1px solid #f6f6f6;
-	}
-	.schema-table:hover { background: #f7f7f9; }
-	.schema-table .tname {
-		flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; cursor: pointer;
-	}
-	.schema-table .tname:hover { color: #0d6efd; }
-	.schema-table .rows { color: #999; font-size: .7rem; white-space: nowrap; }
-	.schema-table .btn-icon {
-		border: 1px solid #ddd; background: #fff; color: #666; border-radius: 4px;
-		font-size: .68rem; line-height: 1; padding: .15rem .35rem; cursor: pointer;
-	}
-	.schema-table .btn-icon:hover { border-color: #0d6efd; color: #0d6efd; }
-	.schema-columns { padding: .1rem 0 .3rem 2.2rem; background: #fafafa; border-bottom: 1px solid #f1f1f1; }
-	.schema-column {
-		display: flex; justify-content: space-between; gap: .5rem; padding: .12rem .9rem .12rem 0;
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; cursor: pointer;
-	}
-	.schema-column:hover { color: #0d6efd; }
-	.schema-column .ctype { color: #999; font-family: inherit; }
-	.schema-empty { padding: 1rem; color: #888; font-size: .82rem; }
-
 	/* ── Editor ── */
 	.editor-toolbar {
 		display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
@@ -105,6 +69,7 @@
 	#data-table .tabulator-cell { white-space: nowrap; }
 
 	/* ── History / saved ── */
+	.query-empty { padding: 1rem; color: #888; font-size: .82rem; }
 	.query-list { max-height: 60vh; overflow-y: auto; }
 	.query-list-item {
 		display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem;
@@ -128,22 +93,8 @@
 <div class="container-fluid">
 	<div class="row g-3">
 
-		<!-- ───────── Schema browser ───────── -->
-		<div class="col-lg-3 col-xl-2">
-			<div class="panel" id="schema-panel">
-				<div class="panel-head">
-					<span>Tables <span id="schema-count" class="text-muted fw-normal"></span></span>
-					<button class="btn btn-link btn-sm p-0 text-decoration-none" id="schema-refresh" title="Reload table list" style="font-size:.75rem;">Refresh</button>
-				</div>
-				<div class="p-2 border-bottom">
-					<input type="search" class="form-control form-control-sm" id="schema-search" placeholder="Search tables &amp; columns…" autocomplete="off">
-				</div>
-				<div id="schema-list"><div class="schema-empty">Loading tables…</div></div>
-			</div>
-		</div>
-
 		<!-- ───────── Editor + results ───────── -->
-		<div class="col-lg-9 col-xl-10">
+		<div class="col-12">
 
 			<div class="panel mb-3">
 				<div class="editor-toolbar">
@@ -287,7 +238,6 @@ document.addEventListener("DOMContentLoaded", function () {
 	const $ = (id) => document.getElementById(id);
 	const fmt = (n) => Number(n || 0).toLocaleString();
 	const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-	const quoteIdent = (name) => /^[a-z_][a-z0-9_]*$/.test(name) ? name : '"' + name.replace(/"/g, '""') + '"';
 
 	/* ───────── storage helpers ───────── */
 	function loadList(key) { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; } }
@@ -303,163 +253,28 @@ document.addEventListener("DOMContentLoaded", function () {
 		window.cmEditor.dispatch({ changes: { from: 0, to: window.cmEditor.state.doc.length, insert: text } });
 		window.cmEditor.focus();
 	}
-	function insertAtCursor(text) { if (window.cmInsert) window.cmInsert(text); else setSql(getSql() + text); }
 	const preview = (sql) => { const s = sql.replace(/\s+/g, " ").trim(); return s.length > 160 ? s.slice(0, 160) + "…" : s; };
 
-	/* ───────── schema browser ───────── */
-	let allTables = [];
-	const columnsCache = {};      // "schema.table" -> [{column, type}]
-	const openTables = new Set(); // expanded in the sidebar
-	const cmSchema = {};          // table -> [column names], fed to CodeMirror autocomplete
-
-	function groupKey(name) {
-		const m = name.match(/^([a-z]+)_(\d{4})/);
-		return m ? `${m[1]}_${m[2]}` : "other";
-	}
+	/* ───────── table-name autocomplete ───────── */
+	const cmSchema = {};
 
 	function pushCmSchema() {
 		if (window.cmSetSchema) window.cmSetSchema(cmSchema);
 	}
 
 	async function loadTables() {
-		$("schema-list").innerHTML = '<div class="schema-empty">Loading tables…</div>';
 		try {
 			const res = await fetch("/api/db-tables");
 			const data = await res.json();
-			if (data.error) throw new Error(data.error);
-			allTables = data.rows.map((r) => ({
-				schema: r.schema, name: r.table_name, rows: r.estimated_rows, cols: r.columns,
-				type: r.object_type, size: r.total_size, group: groupKey(r.table_name),
-			}));
-			allTables.forEach((t) => { if (!cmSchema[t.name]) cmSchema[t.name] = []; });
+			if (!res.ok || data.error) throw new Error(data.error || "Could not load table names.");
+			data.rows.forEach((r) => { cmSchema[r.table_name] = []; });
 			pushCmSchema();
-			$("schema-count").textContent = `(${allTables.length})`;
-			renderSchema();
 		} catch (err) {
-			$("schema-list").innerHTML = `<div class="schema-empty text-danger">Could not load tables: ${escapeHtml(err.message)}</div>`;
+			flashStatus("Table autocomplete unavailable: " + err.message, true);
 		}
 	}
 
-	async function loadColumns(t) {
-		const key = `${t.schema}.${t.name}`;
-		if (columnsCache[key]) return columnsCache[key];
-		const res = await fetch(`/api/db-tables/columns?schema=${encodeURIComponent(t.schema)}&table=${encodeURIComponent(t.name)}`);
-		const data = await res.json();
-		if (data.error) throw new Error(data.error);
-		columnsCache[key] = data.rows.map((r) => ({ column: r.column, type: r.type }));
-		cmSchema[t.name] = columnsCache[key].map((c) => c.column);
-		pushCmSchema();
-		return columnsCache[key];
-	}
-
-	const collapsedGroups = new Set();
-
-	function renderSchema() {
-		const q = $("schema-search").value.trim().toLowerCase();
-		const list = $("schema-list");
-		list.innerHTML = "";
-
-		const matches = (t) => {
-			if (!q) return true;
-			if (t.name.toLowerCase().includes(q)) return true;
-			const cols = columnsCache[`${t.schema}.${t.name}`];
-			return !!(cols && cols.some((c) => c.column.toLowerCase().includes(q)));
-		};
-		const visible = allTables.filter(matches);
-		if (!visible.length) {
-			list.innerHTML = '<div class="schema-empty">No tables match.</div>';
-			return;
-		}
-
-		const groups = new Map();
-		visible.forEach((t) => { if (!groups.has(t.group)) groups.set(t.group, []); groups.get(t.group).push(t); });
-		const order = [...groups.keys()].sort((a, b) => (a === "other") - (b === "other") || a.localeCompare(b));
-
-		order.forEach((g) => {
-			const tables = groups.get(g);
-			const wrap = document.createElement("div");
-			const collapsed = !q && collapsedGroups.has(g);
-			wrap.className = "schema-group" + (collapsed ? " collapsed" : "");
-
-			const head = document.createElement("div");
-			head.className = "schema-group-head";
-			head.innerHTML = `<span>${collapsed ? "▸" : "▾"} ${escapeHtml(g)}</span><span class="count">${tables.length}</span>`;
-			head.addEventListener("click", () => {
-				collapsedGroups.has(g) ? collapsedGroups.delete(g) : collapsedGroups.add(g);
-				renderSchema();
-			});
-			wrap.appendChild(head);
-
-			const body = document.createElement("div");
-			body.className = "schema-group-body";
-			tables.forEach((t) => body.appendChild(renderTableRow(t, q)));
-			wrap.appendChild(body);
-			list.appendChild(wrap);
-		});
-	}
-
-	function renderTableRow(t, q) {
-		const frag = document.createDocumentFragment();
-		const row = document.createElement("div");
-		row.className = "schema-table";
-		row.title = `${t.type} · ${fmt(t.cols)} columns` + (t.rows >= 0 ? ` · ~${fmt(t.rows)} rows · ${t.size}` : "");
-
-		const toggle = document.createElement("button");
-		toggle.className = "btn-icon";
-		toggle.textContent = openTables.has(t.name) ? "−" : "+";
-		toggle.title = "Show columns";
-		toggle.addEventListener("click", async () => {
-			if (openTables.has(t.name)) { openTables.delete(t.name); renderSchema(); return; }
-			openTables.add(t.name);
-			try { await loadColumns(t); } catch (e) { console.warn(e); }
-			renderSchema();
-		});
-
-		const name = document.createElement("span");
-		name.className = "tname";
-		name.textContent = t.name;
-		name.title = "Click to insert the table name at the cursor";
-		name.addEventListener("click", () => insertAtCursor(quoteIdent(t.name)));
-
-		const rows = document.createElement("span");
-		rows.className = "rows";
-		rows.textContent = t.rows >= 0 ? fmt(t.rows) : "";
-
-		const run = document.createElement("button");
-		run.className = "btn-icon";
-		run.textContent = "▶";
-		run.title = "Preview: SELECT * … LIMIT 100";
-		run.addEventListener("click", () => {
-			setSql(`SELECT *\nFROM ${quoteIdent(t.name)}\nLIMIT 100;`);
-			runQuery();
-		});
-
-		row.append(toggle, name, rows, run);
-		frag.appendChild(row);
-
-		if (openTables.has(t.name)) {
-			const cols = columnsCache[`${t.schema}.${t.name}`];
-			const box = document.createElement("div");
-			box.className = "schema-columns";
-			if (!cols) {
-				box.innerHTML = '<div class="schema-column text-muted">Loading…</div>';
-			} else {
-				cols.filter((c) => !q || c.column.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)).forEach((c) => {
-					const el = document.createElement("div");
-					el.className = "schema-column";
-					el.title = "Click to insert the column name at the cursor";
-					el.innerHTML = `<span>${escapeHtml(c.column)}</span><span class="ctype">${escapeHtml(c.type)}</span>`;
-					el.addEventListener("click", () => insertAtCursor(quoteIdent(c.column)));
-					box.appendChild(el);
-				});
-			}
-			frag.appendChild(box);
-		}
-		return frag;
-	}
-
-	$("schema-search").addEventListener("input", renderSchema);
-	$("schema-refresh").addEventListener("click", loadTables);
+	document.addEventListener("cm-ready", pushCmSchema);
 
 	/* ───────── results table ───────── */
 	function numericFilter(headerValue, rowValue) {
@@ -663,7 +478,7 @@ document.addEventListener("DOMContentLoaded", function () {
 		const box = $("query-history-list");
 		$("history-count").textContent = queryHistory.length;
 		box.innerHTML = "";
-		if (!queryHistory.length) { box.innerHTML = '<div class="schema-empty">No queries run yet.</div>'; return; }
+		if (!queryHistory.length) { box.innerHTML = '<div class="query-empty">No queries run yet.</div>'; return; }
 		queryHistory.forEach((h) => {
 			const item = document.createElement("div");
 			item.className = "query-list-item";
@@ -703,7 +518,7 @@ document.addEventListener("DOMContentLoaded", function () {
 		const box = $("saved-queries-list");
 		$("saved-count").textContent = savedQueries.length;
 		box.innerHTML = "";
-		if (!savedQueries.length) { box.innerHTML = '<div class="schema-empty">No saved queries yet.</div>'; return; }
+		if (!savedQueries.length) { box.innerHTML = '<div class="query-empty">No saved queries yet.</div>'; return; }
 		savedQueries.forEach((s) => {
 			const item = document.createElement("div");
 			item.className = "query-list-item";

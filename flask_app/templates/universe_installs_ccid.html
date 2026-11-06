@@ -26,8 +26,10 @@
 	.stat-card.clickable:hover { border-color: #0d6efd; }
 	.stat-card.clickable .stat-hint { font-size: .7rem; color: #0d6efd; }
 
-	#facetModal .modal-content { border: 1px solid #ddd; border-radius: 6px; box-shadow: none; }
+	#facetModal .modal-dialog { width: calc(100% - 2rem); max-width: 1600px; margin: 1rem auto; }
+	#facetModal .modal-content { height: calc(100vh - 2rem); border: 1px solid #ddd; border-radius: 6px; box-shadow: none; }
 	#facetModal .modal-body { display: flex; flex-direction: column; gap: .6rem; }
+	#facet-table { flex: 1; min-height: 0; }
 	#facetModal .hint { font-size: .78rem; color: #666; }
 	#facet-table { font-size: .83rem; }
 	#facet-table .tabulator-row { cursor: pointer; }
@@ -98,7 +100,7 @@
 
 <!-- Unique values dialog (vendors / categories / series) -->
 <div class="modal fade" id="facetModal" tabindex="-1" aria-labelledby="facetTitle" aria-hidden="true">
-	<div class="modal-dialog modal-dialog-centered modal-lg">
+	<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
 		<div class="modal-content">
 			<div class="modal-header">
 				<h6 class="modal-title mb-0" id="facetTitle">Values</h6>
@@ -205,7 +207,7 @@ document.addEventListener("DOMContentLoaded", function () {
 	});
 
 	const facetTable = new Tabulator("#facet-table", {
-		height: "60vh",
+		height: "100%",
 		layout: "fitColumns",
 		placeholder: "No values",
 		headerSortTriState: true,

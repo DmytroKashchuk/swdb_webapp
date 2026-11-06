@@ -12,7 +12,7 @@ A minimal Flask + Tabulator web app for running **read-only** SQL queries agains
 Create and activate a virtual environment (recommended), then install dependencies:
 
 ```bash
-pip install flask psycopg2-binary
+pip install -r requirements.txt
 ```
 
 ## Running the app
@@ -31,14 +31,29 @@ http://127.0.0.1:5000/
 
 ## Usage
 
-1. Browse the **Tables** sidebar (search by table or column name; `+` expands a table's columns). Click a table or column name to insert it at the cursor, or `▶` to preview the first 100 rows.
-2. Type or edit the query in the editor (autocomplete knows every table, and the columns of tables you have expanded). Press **Run** or **Ctrl/⌘ + Enter**. **Format** tidies the SQL.
+1. Use the full-width SQL editor; the **Tables** page remains available from the navigation menu to browse tables and columns.
+2. Type or edit the query in the editor (autocomplete knows table names). Press **Run** or **Ctrl/⌘ + Enter**. **Format** tidies the SQL.
 3. Results appear in the **Results** tab: sortable, per-column filters (`>100`, `=exact`), show/hide columns, CSV download, copy as JSON.
 4. **History** keeps the last 100 runs (with outcome); **Saved** stores named queries in the browser and can be exported/imported as JSON.
 
 Safety: every query runs in a read-only transaction with a 120 s statement timeout, one statement at a time, and is capped by the **Row limit** selector (max 10,000; a *truncated* badge tells you when more rows were available).
 
 > Note: Only read-only statements (`SELECT`, `WITH`, `EXPLAIN`, `SHOW`, `TABLE`, `VALUES`) are allowed; anything else is rejected.
+
+## Deploying CCID schemas
+
+The `/ccid-schema/2023`, `/ccid-schema/2024`, and `/ccid-schema/2025` pages
+read their matching Excel data dictionaries under `data/documentation/<year>/`.
+These three workbooks are explicitly included by `.gitignore`; include them
+in your commit when deploying through Git. Other documentation remains ignored.
+Install `requirements.txt` in the server's app environment and restart the app;
+`openpyxl` is required to read the dictionaries. Schema rendering and Markdown
+exports do not require a database connection.
+
+Run the schema and page regression checks with `python -m unittest test_schema_pages`.
+
+The 2023-2025 universe-install pages share a large, responsive vendor/category/series
+dialog. Its counts and CSV export continue to reflect the active table filters.
 
 ## Spiceworks companies browser (`/swdb-companies/<year>`)
 

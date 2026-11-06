@@ -1,0 +1,6 @@
+Flask
+Markdown
+pandas
+psycopg2-binary
+openpyxl
+pyarrow

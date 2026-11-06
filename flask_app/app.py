@@ -858,7 +858,7 @@ def _load_ccid_schema(key):
 	if cached and cached["mtime"] == mtime:
 		return cached
 
-	book = pd.read_excel(xlsx, sheet_name=None, dtype=str, keep_default_na=False)
+	book = pd.read_excel(xlsx, sheet_name=None, dtype=str, keep_default_na=False, engine="openpyxl")
 	dd = book["Data Dictionary"]
 	dd = dd.apply(lambda s: s.str.strip())
 

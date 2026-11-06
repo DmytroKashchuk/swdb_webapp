@@ -4,4 +4,13 @@ flask_app/data/tech_cve/swdb_universe_installs.csv
 **/.DS_Store
 *.csv
 data/nist_cache/
-data/documentation/
+data/documentation/*
+!data/documentation/2023/
+!data/documentation/2024/
+!data/documentation/2025/
+data/documentation/2023/*
+data/documentation/2024/*
+data/documentation/2025/*
+!data/documentation/2023/RDF_v5.0_for_2023_CCID.xlsx
+!data/documentation/2024/RDF_v5.1_for_2024_CCID_data.xlsx
+!data/documentation/2025/RDF_v5.2_for_2025_C&C_data.xlsx
